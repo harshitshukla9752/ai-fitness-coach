@@ -474,7 +474,7 @@ elif st.session_state.page == 'Coach':
                             angle_l = calculate_angle(hip_l, knee_l, ankle_l)
                             
                             hip_r = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-                            knee_r = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+                            knee_r = [landmarks[mp_pose.PoseLandmask.RIGHT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
                             ankle_r = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
                             angle_r = calculate_angle(hip_r, knee_r, ankle_r)
 
