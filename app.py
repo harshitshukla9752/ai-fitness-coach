@@ -3,21 +3,22 @@ import mediapipe as mp
 import numpy as np
 import streamlit as st
 import time
-from utils import calculate_angle # Backend helper function ko import karein
-import streamlit.components.v1 as components # Voice Assistant ke liye
-import pyrebase # Pyrebase use karein
+from utils import calculate_angle
+import streamlit.components.v1 as components
+import pyrebase
 import json
-import requests # Naya tareeka: REST API ke liye
+import requests
+import gc 
 
 # --- Voice Assistant (TTS) Function ---
 def speak(text, lang, voice_name):
-    # (Is code mein koi change nahi)
     text = text.replace("'", "").replace('"', '')
     speech_js = f"""
         <script>
             const text = "{text}";
             const lang = "{lang}";
             const voiceName = "{voice_name}";
+
             function doSpeak() {{
                 const utter = new SpeechSynthesisUtterance(text);
                 utter.lang = lang;
@@ -38,23 +39,33 @@ def speak(text, lang, voice_name):
     """
     components.html(speech_js, height=0, width=0)
 
-# --- MediaPipe ko initialize karein (Backend) ---
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-mp_drawing = mp.solutions.drawing_utils
+# ---  AI Models ko Cache Karein ---
+@st.cache_resource
+def load_models():
+    mp_pose = mp.solutions.pose
+    
+    #  'model_complexity=0' (Lite model) 
+    pose = mp_pose.Pose(
+        model_complexity=0, 
+        min_detection_confidence=0.5, 
+        min_tracking_confidence=0.5
+    )
+    mp_drawing = mp.solutions.drawing_utils
+    return mp_pose, pose, mp_drawing
 
-# --- Streamlit Session State (App ki Memory) ---
+# Models  (cached)
+mp_pose, pose, mp_drawing = load_models()
+
+# --- Session State Initialization ---
 default_states = {
     'voice_enabled': True, 'voice_lang': 'hi-IN', 'voice_name': 'Google हिन्दी',
-    'workout_log': [], 
-    'rep_counter_left': 0, 'rep_counter_right': 0, 'current_set': 1, # NAYA: Set counter
-    'target_reps': 10, 'target_sets': 3, # NAYA: Target goals
+    'workout_log': [], 'rep_counter_left': 0, 'rep_counter_right': 0, 'set_counter': 1,
     'stage_left': 'down', 'stage_right': 'down', 'stage': 'down',
     'feedback': 'Start your workout!', 'last_spoken_feedback': '',
     'start_time': 0, 'webcam_started': False,
-    'firebase_config': None, 'firebase': None, # Config ke liye naya logic
-    'auth': None, 'user': None, 'db': None, 'page': 'Login',
-    'workout_complete_feedback_given': False 
+    'firebase_config_input': '', 'firebase_config': None, 'firebase': None,
+    'auth': None, 'user': None, 'page': 'Login',
+    'target_reps': 10, 'target_sets': 3
 }
 for key, value in default_states.items():
     if key not in st.session_state:
@@ -68,19 +79,14 @@ def safe_speak(text):
 def reset_states(exercise_choice):
     st.session_state.rep_counter_left = 0
     st.session_state.rep_counter_right = 0
-    st.session_state.current_set = 1
-    st.session_state.workout_complete_feedback_given = False
-    
     if exercise_choice in ['Squats', 'Push-ups', 'Lunges', 'Jumping Jacks', 'High Knees']:
         initial_stage = 'up'
     else: 
         initial_stage = 'down'
-        
     st.session_state.stage_left = initial_stage
     st.session_state.stage_right = initial_stage
     st.session_state.stage = initial_stage
-    
-    st.session_state.feedback = f'Starting Set 1 of {st.session_state.target_sets}. Get in position!'
+    st.session_state.feedback = f'Set {st.session_state.set_counter}! Get in position!'
     st.session_state.last_spoken_feedback = st.session_state.feedback
     safe_speak(st.session_state.feedback)
     st.session_state.start_time = time.time()
@@ -93,59 +99,58 @@ VOICE_OPTIONS = {
     'en-US': {
         'English (Female - Default)': 'Google US English',
         'English (Female - Realistic)': 'Microsoft Zira - English (United States)',
-        'English (Male - Realistic)': 'Microsoft David - English (UnitedStates)'
+        'English (Male - Realistic)': 'Microsoft David - English (United States)'
     }
 }
 
-# -----------------------------------------------------------------
-# --- DATABASE LOGIC (REST API - Yahi code hai, koi change nahi) ---
-# -----------------------------------------------------------------
-
-def get_db_url_base(config):
+# --- Database Logic (REST API ) ---
+def get_db_url(config, user_token):
     project_id = config.get("projectId")
-    return f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents"
-
-def get_headers(user_token):
-    return {
-        "Authorization": f"Bearer {user_token}",
-        "Content-Type": "application/json"
-    }
+    user_id = st.session_state.user['localId']
+    collection_path = f"user_logs_{user_id}" 
+    base_url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/{collection_path}"
+    
+   
+    return base_url, user_token
 
 def save_workout_log_rest(config, user_token, workout_data):
-    """Workout log ko REST API se Firestore mein save karein."""
     try:
-        user_id = st.session_state.user['localId']
-        collection_path = f"user_logs_{user_id}"
-        base_url = get_db_url_base(config)
-        url = f"{base_url}/{collection_path}"
-        headers = get_headers(user_token)
+        base_url, token = get_db_url(config, user_token)
+        url = f"{base_url}" 
+        
+        headers = {
+            "Authorization": f"Bearer {user_token}"
+        }
         
         firestore_document = {
             "fields": {
                 "exercise": {"stringValue": workout_data["exercise"]},
                 "side": {"stringValue": workout_data["side"]},
-                "sets_completed": {"integerValue": workout_data["sets_completed"]},
-                "reps_per_set": {"integerValue": workout_data["reps_per_set"]},
+                "reps_left": {"integerValue": workout_data["reps_left"]},
+                "reps_right": {"integerValue": workout_data["reps_right"]},
                 "duration": {"doubleValue": workout_data["duration"]},
+                "set_number": {"integerValue": workout_data["set_number"]},
+                "target_reps": {"integerValue": workout_data["target_reps"]},
                 "timestamp": {"timestampValue": f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"}
             }
         }
         
+        #  Headers = headers
         response = requests.post(url, json=firestore_document, headers=headers)
-        response.raise_for_status()
+        response.raise_for_status() 
         return True
     except Exception as e:
         st.error(f"Database save error: {e}")
         return False
 
 def load_workout_logs_rest(config, user_token):
-    """Workout logs ko REST API se load karein."""
     try:
-        user_id = st.session_state.user['localId']
-        collection_path = f"user_logs_{user_id}"
-        base_url = get_db_url_base(config)
-        url = f"{base_url}/{collection_path}?orderBy=timestamp desc"
-        headers = get_headers(user_token)
+        base_url, token = get_db_url(config, user_token)
+        url = f"{base_url}?orderBy=timestamp desc"
+        
+        headers = {
+            "Authorization": f"Bearer {user_token}"
+        }
         
         response = requests.get(url, headers=headers)
         response.raise_for_status()
@@ -159,107 +164,100 @@ def load_workout_logs_rest(config, user_token):
                 logs.append({
                     "exercise": fields.get("exercise", {}).get("stringValue", "N/A"),
                     "side": fields.get("side", {}).get("stringValue", "N/A"),
-                    "sets_completed": int(fields.get("sets_completed", {}).get("integerValue", 0)),
-                    "reps_per_set": int(fields.get("reps_per_set", {}).get("integerValue", 0)),
+                    "reps_left": int(fields.get("reps_left", {}).get("integerValue", 0)),
+                    "reps_right": int(fields.get("reps_right", {}).get("integerValue", 0)),
                     "duration": float(fields.get("duration", {}).get("doubleValue", 0.0)),
+                    "set_number": int(fields.get("set_number", {}).get("integerValue", 1)),
+                    "target_reps": int(fields.get("target_reps", {}).get("integerValue", 10)),
                 })
         return logs
     except Exception as e:
+        st.error(f"Database load error: {e}")
         return []
-
-# -----------------------------------------------------------------
-# --- END OF DATABASE LOGIC ---
-# -----------------------------------------------------------------
-
 
 # --- Main App ---
 st.title("🏋️ AI Virtual Fitness Coach")
 
-# --- 1. NAYA: Firebase Config Logic (Secrets se padhne ke liye) ---
-if 'firebase_config' not in st.session_state or st.session_state.firebase_config is None:
-    # Pehle Streamlit ke server "Secrets" se check karein
-    if 'firebase_config' in st.secrets:
-        config = dict(st.secrets.firebase_config) # Secrets se load karein
-        st.session_state.firebase_config = config
-        st.sidebar.success("Firebase Config Loaded from Secrets!")
-    else:
-        # Agar Secrets mein nahi mila, toh sidebar mein box dikhayein (local testing ke liye)
-        st.sidebar.title("Configuration")
-        st.sidebar.info("Apna Firebase project config yahaan paste karein.")
-        config_input = st.sidebar.text_area("Firebase Config (JSON format)", 
-                                            height=300, 
-                                            key="firebase_config_input_widget")
-        if config_input:
-            try:
-                config = json.loads(config_input)
-                st.session_state.firebase_config = config
-                st.sidebar.success("Firebase Config Loaded! Rerunning...")
-                time.sleep(1)
-                st.rerun() # Rerun taaki config load ho jaaye
-            except Exception as e:
-                st.sidebar.error(f"Error: Ye JSON format sahi nahi hai. {e}")
-                st.stop() # Config galat hai, aage na badhein
-        else:
-            st.warning("Please sidebar mein Firebase config paste karein.")
-            st.stop() # Config nahi hai, aage na badhein
+#  Deployment Logic ---
 
-# --- 2. Initialize Firebase (Ab config 100% hai) ---
-if 'firebase' not in st.session_state or st.session_state.firebase is None:
+firebase_config_json = None
+if 'firebase_config' in st.secrets:
+    firebase_config_json = json.dumps(st.secrets.firebase_config)
+    st.session_state.firebase_config_input = firebase_config_json # Save karein
+else:
+    st.sidebar.title("Configuration")
+    st.sidebar.info("Apna Firebase project config yahaan paste karein. (Sirf local test ke liye)")
+    config_input = st.sidebar.text_area("Firebase Config (JSON format)", 
+                                        value=st.session_state.firebase_config_input, 
+                                        height=300, 
+                                        key="firebase_config_input_widget")
+    if config_input:
+        firebase_config_json = config_input
+
+
+if firebase_config_json and not st.session_state.firebase:
     try:
-        config = st.session_state.firebase_config
+        config = json.loads(firebase_config_json)
         firebase = pyrebase.initialize_app(config)
         st.session_state.firebase = firebase
         st.session_state.auth = firebase.auth()
+        st.session_state.firebase_config = config
+        
+        if 'firebase_config' not in st.secrets: 
+            st.sidebar.success("Firebase Connected! Login/Signup karein.")
+        
+        st.session_state.firebase_config_input = firebase_config_json
     except Exception as e:
-        st.error(f"Firebase initialize nahi hua. Config check karein. Error: {e}")
-        st.stop()
+        st.sidebar.error(f"Firebase Error: {e}")
+        st.session_state.firebase = None
 
 
-# Page routing logic
+# Page routing
 if st.session_state.page == 'Login' and st.session_state.user:
     st.session_state.page = 'Coach'
 if st.session_state.page == 'Coach' and not st.session_state.user:
     st.session_state.page = 'Login'
 
-# --- 3. Login / Signup Page ---
+# --- 1. Login / Signup Page ---
 if st.session_state.page == 'Login':
     st.header("Login / Sign Up")
     
-    choice = st.radio("Chunein:", ("Login", "Sign Up"))
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
+    if not st.session_state.firebase:
+        st.warning("App Firebase se connect nahi hai.")
+    else:
+        choice = st.radio("Chunein:", ("Login", "Sign Up"))
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
 
-    if choice == "Sign Up":
-        if st.button("Sign Up"):
-            try:
-                user = st.session_state.auth.create_user_with_email_and_password(email, password)
-                st.session_state.user = user
-                st.success("Account ban gaya! Login ho raha hai...")
-                safe_speak("Account created! Logging you in.")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Signup Error: {e}")
+        if choice == "Sign Up":
+            if st.button("Sign Up"):
+                try:
+                    user = st.session_state.auth.create_user_with_email_and_password(email, password)
+                    st.session_state.user = user
+                    st.success("Account ban gaya! Login ho raha hai...")
+                    safe_speak("Account created! Logging you in.")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Signup Error: {e}")
 
-    if choice == "Login":
-        if st.button("Login"):
-            try:
-                user = st.session_state.auth.sign_in_with_email_and_password(email, password)
-                st.session_state.user = user
-                
-                # NAYA LOGIC: Workout logs ko REST API se load karein
-                token = st.session_state.user['idToken']
-                config = st.session_state.firebase_config
-                st.session_state.workout_log = load_workout_logs_rest(config, token)
-                
-                st.success("Login successful!")
-                safe_speak("Login successful!")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Login Error: {e}")
+        if choice == "Login":
+            if st.button("Login"):
+                try:
+                    user = st.session_state.auth.sign_in_with_email_and_password(email, password)
+                    st.session_state.user = user
+                    token = st.session_state.user['idToken']
+                    config = st.session_state.firebase_config
+                    st.session_state.workout_log = load_workout_logs_rest(config, token)
+                    st.session_state.set_counter = 1 
+                    st.success("Login successful!")
+                    safe_speak("Login successful!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Login Error: {e}")
 
-# --- 4. Main Coach Page (Login ke baad) ---
+# --- 2. Main Coach Page (Login ke baad) ---
 elif st.session_state.page == 'Coach':
     
     # --- Sidebar (Coach Settings) ---
@@ -271,16 +269,23 @@ elif st.session_state.page == 'Coach':
         key="exercise_choice"
     )
 
+    #  Target Reps/Sets
+    st.sidebar.divider()
+    st.sidebar.title("🎯 Set Your Target")
+    st.session_state.target_reps = st.sidebar.number_input("Target Reps per Set", min_value=1, value=st.session_state.target_reps)
+    st.session_state.target_sets = st.sidebar.number_input("Target Number of Sets", min_value=1, value=st.session_state.target_sets)
+    st.sidebar.divider()
+
     if exercise_choice in ["Bicep Curls", "Push-ups", "Overhead Press"]:
         side_label = "Kaunsa haath track karein?"
     elif exercise_choice in ["Squats", "Lunges", "High Knees"]:
         side_label = "Kaunsa pair track karein?"
-    else: 
+    else: # Jumping Jacks
         side_label = "Tracking:"
     
     side_options = ("Left", "Right", "Both")
     if exercise_choice in ["Jumping Jacks"]:
-        side_options = ("Both",)
+        side_options = ("Both",) 
         
     side_choice = st.sidebar.selectbox(
         side_label,
@@ -289,15 +294,7 @@ elif st.session_state.page == 'Coach':
     )
     
     st.sidebar.divider()
-
-    # --- Target Goals ---
-    st.sidebar.title("🎯 Your Targets")
-    st.session_state.target_reps = st.sidebar.number_input("Target Reps (per set)", min_value=1, value=st.session_state.target_reps)
-    st.session_state.target_sets = st.sidebar.number_input("Target Sets", min_value=1, value=st.session_state.target_sets)
-
-    st.sidebar.divider()
     
-    # --- Voice Assistant ---
     st.sidebar.title("🗣️ Voice Assistant")
     st.session_state.voice_enabled = st.sidebar.checkbox("Enable Voice Assistant", value=st.session_state.voice_enabled)
     lang_map = {'Hindi': 'hi-IN', 'English': 'en-US'}
@@ -327,8 +324,8 @@ elif st.session_state.page == 'Coach':
     else:
         for i, log in enumerate(st.session_state.workout_log):
             st.sidebar.success(
-                f"**Session {len(st.session_state.workout_log) - i}:** {log['exercise']} ({log['side']})\n"
-                f"{log['sets_completed']} Sets x {log['reps_per_set']} Reps\n"
+                f"**Set {log['set_number']} ({log['exercise']})**\n"
+                f"Target: {log['target_reps']} | Left: {log['reps_left']} | Right: {log['reps_right']} \n"
                 f"Duration: {log['duration']:.0f}s"
             )
             
@@ -337,6 +334,7 @@ elif st.session_state.page == 'Coach':
         st.session_state.user = None
         st.session_state.auth = None
         st.session_state.workout_log = []
+        st.session_state.set_counter = 1 
         st.success("Logged out successfully!")
         safe_speak("Logged out successfully!")
         time.sleep(1)
@@ -353,21 +351,19 @@ elif st.session_state.page == 'Coach':
         
         elif not st.session_state.webcam_started and st.session_state.start_time != 0:
             # Stop logic
-            final_sets = st.session_state.current_set
-            # Agar aakhri set poora nahi hua, toh use count na karein
-            if max(st.session_state.rep_counter_left, st.session_state.rep_counter_right) < st.session_state.target_reps:
-                final_sets -= 1
-                
-            final_reps_per_set = st.session_state.target_reps
+            final_reps_left = st.session_state.rep_counter_left
+            final_reps_right = st.session_state.rep_counter_right
             final_duration = time.time() - st.session_state.start_time
             
-            if final_sets > 0:
+            if final_reps_left > 0 or final_reps_right > 0:
                 log_data = {
                     "exercise": exercise_choice,
                     "side": side_choice,
-                    "sets_completed": final_sets,
-                    "reps_per_set": final_reps_per_set,
-                    "duration": final_duration
+                    "reps_left": final_reps_left,
+                    "reps_right": final_reps_right,
+                    "duration": final_duration,
+                    "set_number": st.session_state.set_counter, # Set number ko log karein
+                    "target_reps": st.session_state.target_reps # Target ko log karein
                 }
                 
                 token = st.session_state.user['idToken']
@@ -376,15 +372,26 @@ elif st.session_state.page == 'Coach':
                 
                 if save_success:
                     st.session_state.workout_log.insert(0, log_data)
-                    log_text = f"Workout logged! {final_sets} sets of {final_reps_per_set} reps."
+                    log_text = f"Set {st.session_state.set_counter} complete! Left: {final_reps_left}, Right: {final_reps_right} reps."
                     st.success(log_text)
                     safe_speak(log_text)
+                    
+                    if st.session_state.set_counter < st.session_state.target_sets:
+                        st.session_state.set_counter += 1
+                        st.info(f"Get ready for Set {st.session_state.set_counter}!")
+                        safe_speak(f"Get ready for Set {st.session_state.set_counter}!")
+                    else:
+                        st.balloons()
+                        st.success("Workout Complete! Excellent job!")
+                        safe_speak("Workout Complete! Excellent job!")
+                        st.session_state.set_counter = 1 # Workout poora, reset
+                        
                 else:
                     st.error("Workout log save nahi hua (Database Error).")
                     safe_speak("Failed to log workout.")
             else:
-                st.warning("Koi set complete nahi hua. Workout log nahi hua.")
-                safe_speak("No sets completed. Workout not logged.")
+                st.warning("Koi rep detect nahi hua. Workout log nahi hua.")
+                safe_speak("No reps detected. Workout not logged.")
             
             st.session_state.start_time = 0
             st.rerun()
@@ -411,47 +418,45 @@ elif st.session_state.page == 'Coach':
                 image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
                 
                 angle_l, angle_r = 0, 0
-                feedback_msg = st.session_state.feedback
-                
-                workout_finished = st.session_state.current_set > st.session_state.target_sets
-                if workout_finished and not st.session_state.workout_complete_feedback_given:
-                    feedback_msg = "Workout Complete! Stop the camera to save."
-                    st.session_state.workout_complete_feedback_given = True
+                feedback_msg = st.session_state.feedback 
                 
                 try:
-                    if results.pose_landmarks and not workout_finished:
+                    if results.pose_landmarks:
                         landmarks = results.pose_landmarks.landmark
                         
-                        # (Exercise logic mein koi change nahi)
                         if exercise_choice in ["Bicep Curls", "Push-ups", "Overhead Press"]:
                             shoulder_l = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                             elbow_l = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
                             wrist_l = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
                             angle_l = calculate_angle(shoulder_l, elbow_l, wrist_l)
+                            
                             shoulder_r = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
                             elbow_r = [landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
                             wrist_r = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
                             angle_r = calculate_angle(shoulder_r, elbow_r, wrist_r)
+
                         elif exercise_choice in ["Squats", "Lunges", "High Knees"]:
                             hip_l = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
                             knee_l = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
                             ankle_l = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
                             angle_l = calculate_angle(hip_l, knee_l, ankle_l)
+                            
                             hip_r = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
                             knee_r = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
                             ankle_r = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
                             angle_r = calculate_angle(hip_r, knee_r, ankle_r)
+
                         elif exercise_choice == "Jumping Jacks":
                             shoulder_l = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                             hip_l = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
                             wrist_l = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
-                            angle_l = calculate_angle(hip_l, shoulder_l, wrist_l)
+                            angle_l = calculate_angle(hip_l, shoulder_l, wrist_l) # Arm angle
+                            
                             hip_r = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
                             shoulder_r = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
                             wrist_r = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
-                            angle_r = calculate_angle(hip_r, shoulder_r, wrist_r)
+                            angle_r = calculate_angle(hip_r, shoulder_r, wrist_r) # Arm angle
 
-                        # (Threshold logic mein koi change nahi)
                         if exercise_choice == "Bicep Curls":
                             up_threshold, down_threshold, stage_check = 160, 30, 'down'
                         elif exercise_choice == "Squats":
@@ -463,47 +468,33 @@ elif st.session_state.page == 'Coach':
                         elif exercise_choice == "Lunges":
                             up_threshold, down_threshold, stage_check = 160, 100, 'up'
                         elif exercise_choice == "Jumping Jacks":
-                            up_threshold, down_threshold, stage_check = 160, 30, 'up'
+                            up_threshold, down_threshold, stage_check = 160, 30, 'up' 
                         elif exercise_choice == "High Knees":
-                            up_threshold, down_threshold, stage_check = 160, 90, 'up'
+                            up_threshold, down_threshold, stage_check = 160, 90, 'up' 
 
-                        # Rep Counting Logic (Target ke saath)
-                        def check_set_completion(feedback_msg):
-                            current_reps = max(st.session_state.rep_counter_left, st.session_state.rep_counter_right)
-                            if current_reps >= st.session_state.target_reps:
-                                st.session_state.current_set += 1
-                                if st.session_state.current_set <= st.session_state.target_sets:
-                                    feedback_msg = f"Set {st.session_state.current_set - 1} complete! Next set: Get ready."
-                                    st.session_state.rep_counter_left = 0
-                                    st.session_state.rep_counter_right = 0
-                                    st.session_state.stage_left = stage_check
-                                    st.session_state.stage_right = stage_check
-                                    st.session_state.stage = stage_check
-                                else:
-                                    feedback_msg = "Workout Complete! Stop the camera to save."
-                            return feedback_msg
-
-                        if side_choice == 'Left':
+                        # Rep Counting Logic 
+                        current_reps = max(st.session_state.rep_counter_left, st.session_state.rep_counter_right)
+                        
+                        if current_reps >= st.session_state.target_reps:
+                            feedback_msg = "Set Complete! Stop the webcam."
+                        
+                        elif side_choice == 'Left':
                             if angle_l < down_threshold and st.session_state.stage_left == stage_check:
                                 st.session_state.stage_left = 'down' if stage_check == 'up' else 'up'
                                 st.session_state.rep_counter_left += 1
                                 feedback_msg = f'Rep {st.session_state.rep_counter_left}!'
-                                feedback_msg = check_set_completion(feedback_msg)
                             elif angle_l > up_threshold and st.session_state.stage_left != stage_check:
                                 st.session_state.stage_left = stage_check
-                                if feedback_msg != "Workout Complete! Stop the camera to save.": # Taaki complete msg overwrite na ho
-                                    feedback_msg = f'Set {st.session_state.current_set}: Ready'
+                                feedback_msg = 'Ready'
 
                         elif side_choice == 'Right':
                             if angle_r < down_threshold and st.session_state.stage_right == stage_check:
                                 st.session_state.stage_right = 'down' if stage_check == 'up' else 'up'
                                 st.session_state.rep_counter_right += 1
                                 feedback_msg = f'Rep {st.session_state.rep_counter_right}!'
-                                feedback_msg = check_set_completion(feedback_msg)
                             elif angle_r > up_threshold and st.session_state.stage_right != stage_check:
                                 st.session_state.stage_right = stage_check
-                                if feedback_msg != "Workout Complete! Stop the camera to save.":
-                                    feedback_msg = f'Set {st.session_state.current_set}: Ready'
+                                feedback_msg = 'Ready'
                         
                         elif side_choice == 'Both':
                             stage_l_reached = angle_l < down_threshold
@@ -516,11 +507,9 @@ elif st.session_state.page == 'Coach':
                                 st.session_state.rep_counter_left += 1
                                 st.session_state.rep_counter_right += 1
                                 feedback_msg = f'Rep {st.session_state.rep_counter_left}!'
-                                feedback_msg = check_set_completion(feedback_msg)
                             elif (stage_l_reset and stage_r_reset and st.session_state.stage != stage_check):
                                 st.session_state.stage = stage_check
-                                if feedback_msg != "Workout Complete! Stop the camera to save.":
-                                    feedback_msg = f'Set {st.session_state.current_set}: Ready'
+                                feedback_msg = 'Ready for next rep'
                             elif (stage_l_reached and not stage_r_reached and st.session_state.stage == stage_check):
                                 feedback_msg = 'ERROR: Move right side too!'
                             elif (not stage_l_reached and stage_r_reached and st.session_state.stage == stage_check):
@@ -532,19 +521,16 @@ elif st.session_state.page == 'Coach':
                                     st.session_state.stage == 'up'):
                                     feedback_msg = 'Go lower!'
                         
-                        st.session_state.feedback = feedback_msg
+                        st.session_state.feedback = feedback_msg 
+
+                        # Draw landmarks
                         mp_drawing.draw_landmarks(
                             image_bgr, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
                             mp_drawing.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
                             mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
                         )
                 except Exception as e:
-                    # Jumping jacks mein kabhi kabhi wrist nahi dikhti
-                    if exercise_choice == "Jumping Jacks":
-                        feedback_msg = "Keep arms in frame!"
-                    else:
-                        feedback_msg = "Poora shareer camera mein dikhayein!"
-                    st.session_state.feedback = feedback_msg
+                    st.session_state.feedback = "Poora shareer camera mein dikhayein!"
 
                 # Voice Assistant Logic
                 if (st.session_state.voice_enabled and 
@@ -552,39 +538,37 @@ elif st.session_state.page == 'Coach':
                     st.session_state.last_spoken_feedback = st.session_state.feedback
                     safe_speak(st.session_state.feedback)
 
-                # Frontend UI: Stats (Target ke saath)
-                if side_choice == 'Left':
-                    rep_display = st.session_state.rep_counter_left
-                elif side_choice == 'Right':
-                    rep_display = st.session_state.rep_counter_right
-                else: 
-                    rep_display = st.session_state.rep_counter_left
-                
-                if workout_finished:
-                    set_display = "Done!"
-                    rep_display = "Done!"
-                else:
-                    set_display = f"{st.session_state.current_set} / {st.session_state.target_sets}"
-                    rep_display = f"{rep_display} / {st.session_state.target_reps}"
-
                 stats_placeholder.markdown(f"""
                     <div style="background-color: #222; padding: 15px; border-radius: 10px; font-size: 1.5rem; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                         <div style="text-align: center;">
-                            <strong>SET</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{set_display}</span>
+                            <strong>LEFT REPS</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{st.session_state.rep_counter_left}</span>
                         </div>
                         <div style="text-align: center;">
                             <strong>TIMER</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{int(elapsed_time)}s</span>
                         </div>
                         <div style="text-align: center;">
-                            <strong>REPS</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{rep_display}</span>
+                            <strong>RIGHT REPS</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{st.session_state.rep_counter_right}</span>
                         </div>
                     </div>
+                    
+                    <div style="background-color: #222; padding: 15px; border-radius: 10px; font-size: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                        <div style="text-align: center;">
+                            <strong>TARGET REPS</strong><br><span style="color: #00FFFF; font-size: 2.5rem;">{st.session_state.target_reps}</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <strong>CURRENT SET</strong><br><span style="color: #00FFFF; font-size: 2.5rem;">{st.session_state.set_counter} / {st.session_state.target_sets}</span>
+                        </div>
+                    </div>
+                    
                     <div style="font-size: 1.5rem; text-align: center; margin-top: 15px; color: #00FFFF;">
                         <strong>FEEDBACK:</strong> {st.session_state.feedback}
                     </div>
                 """, unsafe_allow_html=True)
                 
                 video_placeholder.image(image_bgr, channels="BGR", width='stretch')
+                
+                
+                gc.collect()
                 
                 if not st.session_state.webcam_started:
                     break
@@ -593,3 +577,4 @@ elif st.session_state.page == 'Coach':
             cv2.destroyAllWindows()
             stats_placeholder.empty()
             video_placeholder.empty()
+            gc.collect() 
