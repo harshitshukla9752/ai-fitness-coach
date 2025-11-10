@@ -1,0 +1,6 @@
+streamlit
+mediapipe
+numpy
+pyrebase4
+requests
+opencv-contrib-python
