@@ -469,7 +469,7 @@ elif st.session_state.page == 'Coach':
 
                         elif exercise_choice in ["Squats", "Lunges", "High Knees"]:
                             hip_l = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                            knee_l = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmask.LEFT_KNEE.value].y]
+                            knee_l = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
                             ankle_l = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
                             angle_l = calculate_angle(hip_l, knee_l, ankle_l)
                             
