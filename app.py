@@ -45,25 +45,27 @@ def speak(text, lang, voice_name):
 # --- AI Models ko Cache Karein (Memory Fix) ---
 @st.cache_resource
 def load_models():
-    """Safely load MediaPipe pose model.
-
-    This function attempts to initialize MediaPipe normally. In hosted environments
-    where outbound network is blocked, MediaPipe may try to download a .tflite model
-    and fail. We catch initialization errors and provide a helpful message — the
-    recommended production fix is to pre-download the required model during build
-    and place it in the MediaPipe cache path (e.g. ~/.cache/mediapipe or a repo
-    path) so runtime initialization does not require network access.
-    """
+    import os
     mp_pose = mp.solutions.pose
     mp_drawing = mp.solutions.drawing_utils
 
+    # ✅ Set custom writable model path
+    os.environ["MEDIAPIPE_MODEL_PATH"] = os.path.expanduser("~/.mediapipe/modules/pose_landmark/")
+
+    local_model = os.path.join(os.environ["MEDIAPIPE_MODEL_PATH"], "pose_landmark_lite.tflite")
+
+    if not os.path.exists(local_model):
+        st.error("Pose model not found! Please ensure setup.sh runs before deployment.")
+        st.stop()
+
     try:
-        # Prefer lite model for lower memory and faster startup
+        # Try normal initialization first
         pose = mp_pose.Pose(
-            model_complexity=0, # 0=lite, 1=full, 2=heavy
+            model_complexity=0,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
+        st.info("✅ MediaPipe pose model loaded successfully from local cache.")
         return mp_pose, pose, mp_drawing
 
     except Exception as first_err:
