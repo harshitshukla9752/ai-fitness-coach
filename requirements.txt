@@ -4,3 +4,4 @@ numpy
 pyrebase4
 requests
 mediapipe-models
+opencv-contrib-python
