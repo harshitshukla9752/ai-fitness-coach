@@ -9,6 +9,7 @@ import pyrebase
 import json
 import requests
 import gc # Memory fix ke liye
+import os
 
 # --- Voice Assistant (TTS) Function ---
 def speak(text, lang, voice_name):
@@ -44,33 +45,93 @@ def speak(text, lang, voice_name):
 # --- AI Models ko Cache Karein (Memory Fix) ---
 @st.cache_resource
 def load_models():
+    """Safely load MediaPipe pose model.
+
+    This function attempts to initialize MediaPipe normally. In hosted environments
+    where outbound network is blocked, MediaPipe may try to download a .tflite model
+    and fail. We catch initialization errors and provide a helpful message — the
+    recommended production fix is to pre-download the required model during build
+    and place it in the MediaPipe cache path (e.g. ~/.cache/mediapipe or a repo
+    path) so runtime initialization does not require network access.
+    """
     mp_pose = mp.solutions.pose
-    # 'model_complexity=0' (Lite model) use karein taaki server par crash na ho
-    pose = mp_pose.Pose(
-        model_complexity=0, # 0=lite, 1=full, 2=heavy
-        min_detection_confidence=0.5, 
-        min_tracking_confidence=0.5
-    )
     mp_drawing = mp.solutions.drawing_utils
-    return mp_pose, pose, mp_drawing
+
+    try:
+        # Prefer lite model for lower memory and faster startup
+        pose = mp_pose.Pose(
+            model_complexity=0, # 0=lite, 1=full, 2=heavy
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        return mp_pose, pose, mp_drawing
+
+    except Exception as first_err:
+        # If initialization failed (often due to download blocked), try to detect
+        # a locally cached model file and give clear guidance to the user.
+        st.warning(f"MediaPipe init warning: {first_err}")
+
+        # Common cache locations
+        cache_paths = [
+            os.path.join(os.path.expanduser('~'), '.cache', 'mediapipe'),
+            os.path.join(os.path.expanduser('~'), '.mediapipe'),
+            '/tmp/mediapipe',
+            './models'
+        ]
+
+        found_local = False
+        for p in cache_paths:
+            if os.path.exists(p):
+                # if directory exists, we assume the model might be present
+                found_local = True
+                break
+
+        if not found_local:
+            # Provide actionable error and stop app: downloading at runtime likely blocked.
+            st.error(
+                "MediaPipe model initialization failed and no local model cache was found. "
+                "If you're deploying to a managed host (Streamlit Cloud, Heroku, etc.), "
+                "pre-download the MediaPipe model during the build step and place it in "
+                "one of these paths: ~/.cache/mediapipe, ~/.mediapipe, /tmp/mediapipe or ./models. "
+                "See README for exact filename (pose_landmark_*.tflite)."
+            )
+            st.stop()
+
+        # If a cache path exists, try a second time (MediaPipe may find the file now)
+        try:
+            pose = mp_pose.Pose(
+                model_complexity=0,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            return mp_pose, pose, mp_drawing
+        except Exception as second_err:
+            st.error(
+                f"MediaPipe still failed to initialize after checking cache paths:\n{second_err}\n" 
+                "Make sure the model .tflite has been downloaded to the cache or allow network access."
+            )
+            st.stop()
 
 # Models ko load karein (cached)
 mp_pose, pose, mp_drawing = load_models()
 
 # --- Session State Initialization ---
-default_states = {
-    'voice_enabled': True, 'voice_lang': 'hi-IN', 'voice_name': 'Google हिन्दी',
-    'workout_log': [], 'rep_counter_left': 0, 'rep_counter_right': 0, 'set_counter': 1,
-    'stage_left': 'down', 'stage_right': 'down', 'stage': 'down',
-    'feedback': 'Start your workout!', 'last_spoken_feedback': '',
-    'start_time': 0, 'webcam_started': False,
-    'firebase_config_input': '', 'firebase_config': None, 'firebase': None,
-    'auth': None, 'user': None, 'page': 'Login',
-    'target_reps': 10, 'target_sets': 3, 'workout_complete_feedback_given': False
-}
-for key, value in default_states.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+def _init_default_states():
+    default_states = {
+        'voice_enabled': True, 'voice_lang': 'hi-IN', 'voice_name': 'Google हिन्दी',
+        'workout_log': [], 'rep_counter_left': 0, 'rep_counter_right': 0, 'set_counter': 1,
+        'stage_left': 'down', 'stage_right': 'down', 'stage': 'down',
+        'feedback': 'Start your workout!', 'last_spoken_feedback': '',
+        'start_time': 0, 'webcam_started': False,
+        'firebase_config_input': '', 'firebase_config': None, 'firebase': None,
+        'auth': None, 'user': None, 'page': 'Login',
+        'target_reps': 10, 'target_sets': 3, 'workout_complete_feedback_given': False
+    }
+    for key, value in default_states.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+_init_default_states()
 
 # --- Helper functions (Speak, Reset, TTS) ---
 def safe_speak(text):
@@ -409,7 +470,7 @@ elif st.session_state.page == 'Coach':
                 save_success = save_workout_log_rest(config, token, log_data)
                 
                 if save_success:
-                    # Log ko local list mein bhi add karein (taaki UI turant update ho)
+                    # Log ko lokal list mein bhi add karein (taaki UI turant update ho)
                     st.session_state.workout_log.insert(0, log_data)
                     log_text = f"Set {st.session_state.set_counter} complete! Left: {final_reps_left}, Right: {final_reps_right} reps."
                     st.success(log_text)
