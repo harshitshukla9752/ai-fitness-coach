@@ -1,92 +1,164 @@
-🏋️ AI Virtual Fitness Coach
+# 🏋️ AI Virtual Fitness Coach
 
-This is a full-stack AI-powered fitness coach built using Python, Streamlit, MediaPipe, and Firebase. It tracks your workouts in real-time, counts repetitions, and saves your progress permanently.
+*Full Stack AI Fitness Application • Python • Streamlit • MediaPipe • Firebase*
 
-Live Demo Link: (Add your deployed Streamlit Cloud link here)
+## 🚀 Overview
 
-✨ Features
+**AI Virtual Fitness Coach** is a full-stack, AI-powered workout assistant that uses **real-time pose detection**, **rep counting**, **voice feedback**, and **cloud-based progress tracking**. Built using **Python**, **Streamlit**, **MediaPipe**, and **Firebase**, it turns your webcam into a smart fitness trainer.
 
-7 Different Exercises: Includes Bicep Curls, Squats, Push-ups, Overhead Press, Lunges, Jumping Jacks, and High Knees.
+You can perform 7 different exercises, track your reps/sets, receive voice guidance, and store your entire workout history securely in the cloud.
 
-Real-time Pose Estimation: Utilizes Google's MediaPipe to track 33 different human body landmarks from a live webcam feed.
+**Live Demo:** *Add your Streamlit Cloud link here*
 
-Rep & Set Counter: Tracks your entire workout based on user-defined Target Reps and Target Sets.
+---
 
-Live Voice Feedback: A multi-language (Hindi/English) and multi-voice (Male/Female) assistant provides real-time audible feedback like "Rep complete!" or "Go lower!"
+## ✨ Features
 
-User Authentication: Secure Login/Signup system powered by Firebase Authentication (Email/Password).
+### 🔹 **7 Supported Exercises**
 
-Persistent Workout Log: All completed workout sessions (exercise, sets, reps, and duration) are saved permanently to a Firebase Firestore database.
+* Bicep Curls
+* Squats
+* Push-ups
+* Overhead Shoulder Press
+* Lunges
+* Jumping Jacks
+* High Knees
 
-🛠️ Tools & Libraries Used
+### 🔹 **Real-Time Pose Detection**
 
-Python: The core programming language.
+Powered by **MediaPipe Pose**, the app tracks **33 human body keypoints** for accurate motion detection.
 
-Streamlit: To build the interactive frontend web application.
+### 🔹 **Repetition & Set Counter**
 
-OpenCV: To capture and process the live video feed from the webcam.
+Automatically counts:
 
-MediaPipe: For the real-time AI pose estimation model.
+* Reps
+* Sets
+* Exercise duration
+* Workout summary
 
-NumPy: For high-performance mathematical calculations (joint angles).
+### 🔹 **Live Voice Feedback**
 
-Pyrebase4: Python wrapper for Firebase Authentication (Login/Signup).
+* Supports **Hindi/English**
+* **Male/Female voices**
+* Motivational prompts: “Rep complete!”, “Go lower!”, “Keep your posture straight!”
 
-Requests: To communicate with the Firebase Firestore REST API for database operations (saving/loading logs).
+### 🔹 **User Authentication (Firebase)**
 
-🚀 How to Run (Locally)
+Secure **Email/Password Login & Signup** using Firebase Authentication.
 
-Clone the Repository:
+### 🔹 **Workout History & Cloud Sync**
 
-git clone (your repository link)
+Every workout is saved to **Firebase Firestore** permanently:
+
+* Exercise performed
+* Sets completed
+* Total reps
+* Total time
+
+Users can log in from any device and access their history.
+
+---
+
+## 🛠️ Tools & Libraries Used
+
+* **Python** – Primary programming language
+* **Streamlit** – Frontend UI
+* **OpenCV** – Webcam capture & image processing
+* **MediaPipe** – Pose estimation model
+* **NumPy** – Angle math & calculations
+* **Pyrebase4** – Firebase authentication handling
+* **Requests** – Firestore database communication
+
+---
+
+## 🚀 How to Run (Locally)
+
+### **1️⃣ Clone the Repository**
+
+```
+git clone <your_repository_link>
 cd ai-fitness-coach
+```
 
+### **2️⃣ Create & Activate Virtual Environment**
 
-Create and Activate Virtual Environment:
-
+```
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate  # Windows
+```
 
+### **3️⃣ Install Required Libraries**
 
-Install Required Libraries:
-Use the provided requirements.txt file.
-
+```
 pip install -r requirements.txt
+```
 
+### **4️⃣ Setup Firebase**
 
-Get Firebase Keys:
+1. Go to Firebase Console → Create Project
+2. Enable Email/Password Login
+3. Create Firestore Database → Start in Test Mode
+4. Go to **Project Settings** → create a **Web App** (</>)
+5. Copy **firebaseConfig** JSON keys
+6. Manually add this key:
 
-Go to Firebase and create a new project.
+```
+"databaseURL": "https://<your-project-id>.firebaseio.com/"
+```
 
-Go to Authentication -> Sign-in method -> Enable Email/Password.
+### **5️⃣ Run the App**
 
-Go to Firestore Database -> Create database -> Start in Test mode.
-
-Go to Project Settings -> Register a new Web App (</>) and copy the firebaseConfig keys.
-
-Run the App:
-
+```
 streamlit run app.py
+```
 
+### **6️⃣ Paste Firebase Config in App**
 
-Paste your Firebase Config:
+* Browser will open automatically
+* Paste your **full Firebase JSON** in the sidebar
+* When connection succeeds → "Firebase Connected!" will appear
+* Now you can Sign Up / Log In
 
-The app will open in your browser.
+---
 
-Paste the complete firebaseConfig JSON (including a manually added databaseURL key) into the sidebar text area.
+## ☁️ Deployment (Streamlit Community Cloud)
 
-A "Firebase Connected!" message will appear. You can now Sign up or Login.
+1. Push these 3 files to a new **Public GitHub Repo**:
 
-☁️ Deployment (Streamlit Community Cloud)
+   * `app.py`
+   * `requirements.txt`
+   * `utils.py`
 
-Push your three project files (app.py, requirements.txt, utils.py) to a new Public GitHub Repository.
+2. Log in to **share.streamlit.io**
 
-Log in to Streamlit Community Cloud with your GitHub account.
+3. Click **New App** → Select your repository
 
-Click "New app" and select your repository.
+4. Click **Advanced settings...**
 
-Click on "Advanced settings...".
+5. In **Secrets**, paste your Firebase keys in TOML format:
 
-In the "Secrets" box, paste your firebaseConfig keys in TOML format (as shown in the previous deployment steps).
+```
+FIREBASE_CONFIG = """
+{
+  "apiKey": "YOUR_KEY",
+  "authDomain": "YOUR_DOMAIN",
+  "projectId": "YOUR_PROJECT_ID",
+  "storageBucket": "YOUR_BUCKET",
+  "messagingSenderId": "XXXXXXX",
+  "appId": "YOUR_APP_ID",
+  "databaseURL": "YOUR_URL"
+}
+"""
+```
 
-Click "Deploy!".
+6. Click **Deploy!**
+
+Your AI Fitness Coach will go live on Streamlit Cloud.
+
+---
+
+## 🌟 Support
+
+If you find this project helpful:
+**⭐ Star the repository** and share it!
