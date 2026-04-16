@@ -58,6 +58,53 @@ Every workout is saved to **Firebase Firestore** permanently:
 
 Users can log in from any device and access their history.
 
+### 🔹 **Advanced Analytics Dashboard (New)**
+
+Get a complete performance report with:
+
+* Total sessions, reps, and total workout time
+* Daily consistency streak
+* Exercise-wise breakdown table
+* Daily reps trend chart
+* One-click CSV export for report submission
+
+### 🔹 **AI Training Planner (New)**
+
+Built-in adaptive planner recommends your next targets based on:
+
+* Goal type (**Hypertrophy / Strength / Endurance**)
+* Current training load
+* Intensity trend from your history
+
+You can apply recommended reps/sets instantly.
+
+### 🔹 **AI Coach + Smart Weekly Program (New)**
+
+The app now includes an in-built AI coaching layer:
+
+* AI-generated performance insights from your own workout history
+* Smart weekly training plan generator
+* Interactive “Ask AI Coach” assistant for form, recovery, progression, and nutrition basics
+* Optional challenge mode for daily progression prompts
+* **Real LLM support** via OpenAI API for context-aware, non-template answers
+
+### 🔹 **Improved UI/UX (New)**
+
+* Modern dark-gradient interface
+* Card-based analytics and coaching sections
+* Better information hierarchy for project demo presentation
+
+### 🔹 **Body Transformation + Smart Nutrition System (New)**
+
+Now supports complete profile-based planning:
+
+* Body type tracking (mota/high body-fat, patla/lean, average)
+* Goal modes: fat loss, muscle gain, recomposition
+* Daily calories + macros calculator (BMR/TDEE based)
+* Diet preference customization: Vegetarian / Vegan / Non-vegetarian
+* Experience-level blueprint: Beginner / Intermediate / Pro athlete
+* Voice summary for nutrition + plan recommendations
+
 ---
 
 ## 🛠️ Tools & Libraries Used
@@ -92,6 +139,12 @@ venv\Scripts\activate  # Windows
 
 ```
 pip install -r requirements.txt
+```
+
+If you want real AI responses, set:
+
+```
+OPENAI_API_KEY=your_api_key_here
 ```
 
 ### **4️⃣ Setup Firebase**
