@@ -6,3 +6,4 @@ requests
 opencv-contrib-python
 pandas
 openai
+supabase

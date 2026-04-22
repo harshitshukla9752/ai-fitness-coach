@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from collections import defaultdict
 import pandas as pd
 from openai import OpenAI
+from supabase import create_client
 
 # --- Voice Assistant (TTS) Function ---
 def speak(text, lang, voice_name):
@@ -139,7 +140,19 @@ def _init_default_states():
         'challenge_mode': False,
         'ai_last_reply': '',
         'ai_auto_voice': True,
-        'use_real_ai': True
+        'use_real_ai': True,
+        'profile_age': 22,
+        'profile_gender': 'Male',
+        'profile_height_cm': 170,
+        'profile_weight_kg': 70,
+        'profile_body_type': 'Average',
+        'profile_activity_level': 'Moderately Active',
+        'profile_goal_type': 'Body Recomposition (Fat kam + Muscle up)',
+        'profile_diet_type': 'Vegetarian',
+        'profile_experience_level': 'Beginner',
+        'profile_loaded': False,
+        'supabase': None,
+        'use_supabase_auth': False
     }
     for key, value in default_states.items():
         if key not in st.session_state:
@@ -272,6 +285,144 @@ def load_workout_logs_rest(config, user_token):
              st.error(f"Database load error: {error_details}")
         return []
 
+def _to_firestore_value(value):
+    if isinstance(value, bool):
+        return {"booleanValue": value}
+    if isinstance(value, int):
+        return {"integerValue": str(value)}
+    if isinstance(value, float):
+        return {"doubleValue": value}
+    return {"stringValue": str(value)}
+
+def save_user_profile_rest(config, user_token, profile_data):
+    try:
+        project_id = config.get("projectId")
+        user_id = st.session_state.user['localId']
+        document_path = f"user_profiles/{user_id}"
+        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/{document_path}"
+        headers = {
+            "Authorization": f"Bearer {user_token}",
+            "Content-Type": "application/json"
+        }
+        fields = {key: _to_firestore_value(value) for key, value in profile_data.items()}
+        payload = {"fields": fields}
+        response = requests.patch(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return True
+    except Exception as e:
+        st.warning(f"Profile save issue: {e}")
+        return False
+
+def load_user_profile_rest(config, user_token):
+    try:
+        project_id = config.get("projectId")
+        user_id = st.session_state.user['localId']
+        document_path = f"user_profiles/{user_id}"
+        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/{document_path}"
+        headers = {
+            "Authorization": f"Bearer {user_token}",
+            "Content-Type": "application/json"
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        fields = response.json().get("fields", {})
+        profile = {}
+        for key, val in fields.items():
+            if "stringValue" in val:
+                profile[key] = val["stringValue"]
+            elif "integerValue" in val:
+                profile[key] = int(val["integerValue"])
+            elif "doubleValue" in val:
+                profile[key] = float(val["doubleValue"])
+            elif "booleanValue" in val:
+                profile[key] = bool(val["booleanValue"])
+        return profile
+    except Exception as e:
+        st.warning(f"Profile load issue: {e}")
+        return None
+
+def init_supabase():
+    url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+    key = st.secrets.get("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
+    if not url or not key:
+        return None
+    try:
+        return create_client(url, key)
+    except Exception as e:
+        st.warning(f"Supabase init failed: {e}")
+        return None
+
+def save_workout_log_supabase(log_data):
+    try:
+        payload = {**log_data, "user_id": st.session_state.user["localId"]}
+        st.session_state.supabase.table("workout_logs").insert(payload).execute()
+        return True
+    except Exception as e:
+        st.error(f"Supabase save error: {e}")
+        return False
+
+def load_workout_logs_supabase():
+    try:
+        uid = st.session_state.user["localId"]
+        result = (
+            st.session_state.supabase.table("workout_logs")
+            .select("*")
+            .eq("user_id", uid)
+            .order("timestamp", desc=True)
+            .execute()
+        )
+        rows = result.data if result and result.data else []
+        logs = []
+        for row in rows:
+            logs.append({
+                "exercise": row.get("exercise", "N/A"),
+                "side": row.get("side", "N/A"),
+                "reps_left": int(row.get("reps_left", 0)),
+                "reps_right": int(row.get("reps_right", 0)),
+                "duration": float(row.get("duration", 0.0)),
+                "set_number": int(row.get("set_number", 1)),
+                "target_reps": int(row.get("target_reps", 10)),
+                "timestamp": row.get("timestamp", "")
+            })
+        return logs
+    except Exception as e:
+        st.error(f"Supabase load error: {e}")
+        return []
+
+def save_user_profile_supabase(profile_data):
+    try:
+        payload = {**profile_data, "user_id": st.session_state.user["localId"]}
+        st.session_state.supabase.table("user_profiles").upsert(payload, on_conflict="user_id").execute()
+        return True
+    except Exception as e:
+        st.warning(f"Supabase profile save issue: {e}")
+        return False
+
+def load_user_profile_supabase():
+    try:
+        uid = st.session_state.user["localId"]
+        result = st.session_state.supabase.table("user_profiles").select("*").eq("user_id", uid).limit(1).execute()
+        rows = result.data if result and result.data else []
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "age": row.get("age"),
+            "gender": row.get("gender"),
+            "height_cm": row.get("height_cm"),
+            "weight_kg": row.get("weight_kg"),
+            "body_type": row.get("body_type"),
+            "activity_level": row.get("activity_level"),
+            "goal_type": row.get("goal_type"),
+            "diet_type": row.get("diet_type"),
+            "experience_level": row.get("experience_level")
+        }
+    except Exception as e:
+        st.warning(f"Supabase profile load issue: {e}")
+        return None
+
 # -----------------------------------------------------------------
 # --- END OF NEW DATABASE LOGIC ---
 # -----------------------------------------------------------------
@@ -283,6 +434,12 @@ def parse_timestamp(ts):
         return datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except Exception:
         return None
+
+def safe_index(options, value, default=0):
+    try:
+        return options.index(value)
+    except ValueError:
+        return default
 
 def calculate_analytics(logs):
     if not logs:
@@ -643,6 +800,11 @@ if firebase_config_json and not st.session_state.firebase:
         st.sidebar.error(f"Firebase Error: {e}")
         st.session_state.firebase = None
 
+if st.session_state.supabase is None:
+    st.session_state.supabase = init_supabase()
+if st.session_state.supabase is not None:
+    st.session_state.use_supabase_auth = True
+
 
 # Page routing
 if st.session_state.page == 'Login' and st.session_state.user:
@@ -653,9 +815,11 @@ if st.session_state.page == 'Coach' and not st.session_state.user:
 # --- 1. Login / Signup Page ---
 if st.session_state.page == 'Login':
     st.header("Login / Sign Up")
-    
-    if not st.session_state.firebase:
-        st.warning("App Firebase se connect nahi hai.")
+    auth_provider = "Supabase" if st.session_state.use_supabase_auth else "Firebase"
+    st.caption(f"Auth Provider: **{auth_provider}**")
+
+    if not st.session_state.use_supabase_auth and not st.session_state.firebase:
+        st.warning("Na Supabase configured hai, na Firebase connected.")
     else:
         choice = st.radio("Chunein:", ("Login", "Sign Up"))
         email = st.text_input("Email")
@@ -664,8 +828,17 @@ if st.session_state.page == 'Login':
         if choice == "Sign Up":
             if st.button("Sign Up"):
                 try:
-                    user = st.session_state.auth.create_user_with_email_and_password(email, password)
-                    st.session_state.user = user
+                    if st.session_state.use_supabase_auth:
+                        resp = st.session_state.supabase.auth.sign_up({"email": email, "password": password})
+                        user_obj = resp.user
+                        session_obj = resp.session
+                        st.session_state.user = {
+                            "email": user_obj.email if user_obj else email,
+                            "localId": user_obj.id if user_obj else email,
+                            "idToken": session_obj.access_token if session_obj else ""
+                        }
+                    else:
+                        st.session_state.user = st.session_state.auth.create_user_with_email_and_password(email, password)
                     st.success("Account ban gaya! Login ho raha hai...")
                     safe_speak("Account created! Logging you in.")
                     time.sleep(1)
@@ -676,14 +849,38 @@ if st.session_state.page == 'Login':
         if choice == "Login":
             if st.button("Login"):
                 try:
-                    user = st.session_state.auth.sign_in_with_email_and_password(email, password)
-                    st.session_state.user = user
-                    # Login ke baad, naye REST API se log load karein
-                    token = st.session_state.user['idToken']
-                    config = st.session_state.firebase_config
-                    st.session_state.workout_log = load_workout_logs_rest(config, token)
-                    
-                    st.session_state.set_counter = 1 # Naye login par set 1 se shuru
+                    if st.session_state.use_supabase_auth:
+                        resp = st.session_state.supabase.auth.sign_in_with_password({"email": email, "password": password})
+                        user_obj = resp.user
+                        session_obj = resp.session
+                        st.session_state.user = {
+                            "email": user_obj.email,
+                            "localId": user_obj.id,
+                            "idToken": session_obj.access_token if session_obj else ""
+                        }
+                        st.session_state.workout_log = load_workout_logs_supabase()
+                        profile = load_user_profile_supabase()
+                    else:
+                        user = st.session_state.auth.sign_in_with_email_and_password(email, password)
+                        st.session_state.user = user
+                        token = st.session_state.user['idToken']
+                        config = st.session_state.firebase_config
+                        st.session_state.workout_log = load_workout_logs_rest(config, token)
+                        profile = load_user_profile_rest(config, token)
+
+                    if profile:
+                        st.session_state.profile_age = profile.get("age", st.session_state.profile_age)
+                        st.session_state.profile_gender = profile.get("gender", st.session_state.profile_gender)
+                        st.session_state.profile_height_cm = profile.get("height_cm", st.session_state.profile_height_cm)
+                        st.session_state.profile_weight_kg = profile.get("weight_kg", st.session_state.profile_weight_kg)
+                        st.session_state.profile_body_type = profile.get("body_type", st.session_state.profile_body_type)
+                        st.session_state.profile_activity_level = profile.get("activity_level", st.session_state.profile_activity_level)
+                        st.session_state.profile_goal_type = profile.get("goal_type", st.session_state.profile_goal_type)
+                        st.session_state.profile_diet_type = profile.get("diet_type", st.session_state.profile_diet_type)
+                        st.session_state.profile_experience_level = profile.get("experience_level", st.session_state.profile_experience_level)
+                    st.session_state.profile_loaded = True
+
+                    st.session_state.set_counter = 1
                     st.success("Login successful!")
                     safe_speak("Login successful!")
                     time.sleep(1)
@@ -781,6 +978,11 @@ elif st.session_state.page == 'Coach':
             
     # --- Logout Button (Sidebar) ---
     if st.sidebar.button("Logout", use_container_width=True, type="secondary"):
+        if st.session_state.use_supabase_auth and st.session_state.supabase:
+            try:
+                st.session_state.supabase.auth.sign_out()
+            except Exception:
+                pass
         st.session_state.user = None
         st.session_state.auth = None
         st.session_state.workout_log = []
@@ -825,9 +1027,12 @@ elif st.session_state.page == 'Coach':
                     }
                     
                     # NAYA LOGIC: Log ko REST API se save karein
-                    token = st.session_state.user['idToken']
-                    config = st.session_state.firebase_config
-                    save_success = save_workout_log_rest(config, token, log_data)
+                    if st.session_state.use_supabase_auth:
+                        save_success = save_workout_log_supabase(log_data)
+                    else:
+                        token = st.session_state.user['idToken']
+                        config = st.session_state.firebase_config
+                        save_success = save_workout_log_rest(config, token, log_data)
                     
                     if save_success:
                         # Log ko lokal list mein bhi add karein (taaki UI turant update ho)
@@ -925,20 +1130,56 @@ elif st.session_state.page == 'Coach':
         st.markdown("### 🧬 Body Type + Goal Based Smart Nutrition Engine")
         col_a, col_b, col_c = st.columns(3)
         with col_a:
-            age = st.number_input("Age", min_value=14, max_value=75, value=22)
-            gender = st.selectbox("Gender", ["Male", "Female"])
-            experience_level = st.selectbox("Level", ["Beginner", "Intermediate", "Pro / Advanced Athlete"])
+            age = st.number_input("Age", min_value=14, max_value=75, value=st.session_state.profile_age)
+            gender_options = ["Male", "Female"]
+            gender = st.selectbox("Gender", gender_options, index=safe_index(gender_options, st.session_state.profile_gender))
+            level_options = ["Beginner", "Intermediate", "Pro / Advanced Athlete"]
+            experience_level = st.selectbox("Level", level_options, index=safe_index(level_options, st.session_state.profile_experience_level))
         with col_b:
-            height_cm = st.number_input("Height (cm)", min_value=130, max_value=220, value=170)
-            weight_kg = st.number_input("Weight (kg)", min_value=35, max_value=180, value=70)
-            body_type = st.selectbox("Body Type", ["Mota/High Body Fat", "Patla/Lean-Skinny", "Average"])
+            height_cm = st.number_input("Height (cm)", min_value=130, max_value=220, value=st.session_state.profile_height_cm)
+            weight_kg = st.number_input("Weight (kg)", min_value=35, max_value=180, value=st.session_state.profile_weight_kg)
+            body_type_options = ["Mota/High Body Fat", "Patla/Lean-Skinny", "Average"]
+            body_type = st.selectbox("Body Type", body_type_options, index=safe_index(body_type_options, st.session_state.profile_body_type))
         with col_c:
-            activity_level = st.selectbox("Activity", ["Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Athlete"])
+            activity_options = ["Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Athlete"]
+            activity_level = st.selectbox("Activity", activity_options, index=safe_index(activity_options, st.session_state.profile_activity_level))
+            goal_options = ["Fat Loss (Mota se Fit/Patla)", "Muscle Gain (Patla se Mota/Fit)", "Body Recomposition (Fat kam + Muscle up)"]
             goal_type = st.selectbox(
                 "Transformation Goal",
-                ["Fat Loss (Mota se Fit/Patla)", "Muscle Gain (Patla se Mota/Fit)", "Body Recomposition (Fat kam + Muscle up)"]
+                goal_options,
+                index=safe_index(goal_options, st.session_state.profile_goal_type)
             )
-            diet_type = st.selectbox("Diet Preference", ["Vegetarian", "Vegan", "Non-Vegetarian"])
+            diet_options = ["Vegetarian", "Vegan", "Non-Vegetarian"]
+            diet_type = st.selectbox("Diet Preference", diet_options, index=safe_index(diet_options, st.session_state.profile_diet_type))
+
+        st.session_state.profile_age = age
+        st.session_state.profile_gender = gender
+        st.session_state.profile_height_cm = height_cm
+        st.session_state.profile_weight_kg = weight_kg
+        st.session_state.profile_body_type = body_type
+        st.session_state.profile_activity_level = activity_level
+        st.session_state.profile_goal_type = goal_type
+        st.session_state.profile_diet_type = diet_type
+        st.session_state.profile_experience_level = experience_level
+
+        if st.button("💾 Save Profile for Next Login", use_container_width=True):
+            profile_payload = {
+                "age": age,
+                "gender": gender,
+                "height_cm": height_cm,
+                "weight_kg": weight_kg,
+                "body_type": body_type,
+                "activity_level": activity_level,
+                "goal_type": goal_type,
+                "diet_type": diet_type,
+                "experience_level": experience_level,
+                "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            }
+            token = st.session_state.user['idToken']
+            config = st.session_state.firebase_config
+            saved = save_user_profile_supabase(profile_payload) if st.session_state.use_supabase_auth else save_user_profile_rest(config, token, profile_payload)
+            if saved:
+                st.success("Profile saved. Next login me auto-load ho jayega.")
 
         calorie_data = calculate_calories_and_macros(age, gender, height_cm, weight_kg, activity_level, goal_type)
         meal_plan, level_tip, goal_tip = get_diet_recommendations(diet_type, goal_type, experience_level)
