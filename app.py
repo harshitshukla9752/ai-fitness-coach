@@ -1,11 +1,9 @@
 import cv2
 import mediapipe as mp
-import numpy as np
 import streamlit as st
 import time
 from utils import calculate_angle
 import streamlit.components.v1 as components
-import pyrebase
 import json
 import requests
 import gc # Memory fix ke liye
@@ -56,13 +54,20 @@ def load_models():
     mp_pose = mp.solutions.pose
     mp_drawing = mp.solutions.drawing_utils
 
-    # ✅ Set custom writable model path
-    os.environ["MEDIAPIPE_MODEL_PATH"] = os.path.expanduser("~/.mediapipe/modules/pose_landmark/")
+    # Prefer bundled model path when available, otherwise fall back to user cache path.
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    bundled_model = os.path.join(project_dir, "models", "pose_landmark_lite.tflite")
+    cache_model_dir = os.path.expanduser("~/.mediapipe/modules/pose_landmark/")
+    cache_model = os.path.join(cache_model_dir, "pose_landmark_lite.tflite")
 
-    local_model = os.path.join(os.environ["MEDIAPIPE_MODEL_PATH"], "pose_landmark_lite.tflite")
+    local_model = bundled_model if os.path.exists(bundled_model) else cache_model
+    os.environ["MEDIAPIPE_MODEL_PATH"] = os.path.dirname(local_model)
 
     if not os.path.exists(local_model):
-        st.error("Pose model not found! Please ensure setup.sh runs before deployment.")
+        st.error(
+            "Pose model not found. Expected at ./models/pose_landmark_lite.tflite "
+            "or ~/.mediapipe/modules/pose_landmark/pose_landmark_lite.tflite."
+        )
         st.stop()
 
     try:
@@ -237,7 +242,7 @@ def save_workout_log_rest(config, user_token, workout_data):
         error_details = e
         try:
             error_details = response.json()
-        except:
+        except Exception:
             pass
         st.error(f"Database save error: {error_details}")
         return False
@@ -278,7 +283,7 @@ def load_workout_logs_rest(config, user_token):
         error_details = e
         try:
             error_details = response.json()
-        except:
+        except Exception:
             pass
         # Pehli baar login par error na dikhayein (jab collection nahi bana hai)
         if "Missing" not in str(error_details):
@@ -344,8 +349,21 @@ def load_user_profile_rest(config, user_token):
         return None
 
 def init_supabase():
-    url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
-    key = st.secrets.get("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
+    secrets_url = st.secrets.get("SUPABASE_URL")
+    secrets_key = st.secrets.get("SUPABASE_ANON_KEY")
+
+    # Support nested Streamlit secrets format:
+    # [supabase]
+    # url = "..."
+    # key = "..."
+    supabase_block = st.secrets.get("supabase", {})
+    block_url = supabase_block.get("url") if isinstance(supabase_block, dict) else None
+    block_key = None
+    if isinstance(supabase_block, dict):
+        block_key = supabase_block.get("key") or supabase_block.get("anon_key")
+
+    url = secrets_url or block_url or os.getenv("SUPABASE_URL")
+    key = secrets_key or block_key or os.getenv("SUPABASE_ANON_KEY")
     if not url or not key:
         return None
     try:
@@ -763,47 +781,17 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Deployment Logic (Secrets / Sidebar) ---
-firebase_config_json = None
-# 1. Pehle 'Secrets' check karein (Server ke liye)
-if 'firebase_config' in st.secrets:
-    try:
-        firebase_config_json = json.dumps(st.secrets.firebase_config)
-        st.session_state.firebase_config_input = firebase_config_json # Save karein
-    except:
-        st.error("Firebase Secrets load karne mein error.")
-# 2. Agar nahi mila, toh sidebar (Local test ke liye)
-else:
-    st.sidebar.title("Configuration")
-    st.sidebar.info("Apna Firebase project config yahaan paste karein. (Sirf local test ke liye)")
-    config_input = st.sidebar.text_area("Firebase Config (JSON format)", 
-                                        value=st.session_state.firebase_config_input, 
-                                        height=300, 
-                                        key="firebase_config_input_widget")
-    if config_input:
-        firebase_config_json = config_input
-
-# --- Firebase Initialize (Ab ye safe hai) ---
-if firebase_config_json and not st.session_state.firebase:
-    try:
-        config = json.loads(firebase_config_json)
-        firebase = pyrebase.initialize_app(config)
-        st.session_state.firebase = firebase
-        st.session_state.auth = firebase.auth() # Sirf login ke liye use hoga
-        st.session_state.firebase_config = config
-        
-        if 'firebase_config' not in st.secrets: # Local test par message dikhayein
-            st.sidebar.success("Firebase Connected! Login/Signup karein.")
-        
-        st.session_state.firebase_config_input = firebase_config_json
-    except Exception as e:
-        st.sidebar.error(f"Firebase Error: {e}")
-        st.session_state.firebase = None
+# --- Deployment Logic (Supabase only) ---
+st.sidebar.title("Configuration")
+st.sidebar.info("App ab sirf Supabase Auth + DB use karta hai.")
+st.sidebar.code(
+    "SUPABASE_URL=https://<project-ref>.supabase.co\nSUPABASE_ANON_KEY=<anon-key>\n\n# OR in secrets.toml\n[supabase]\nurl=\"https://<project-ref>.supabase.co\"\nkey=\"<anon-key>\"",
+    language="bash"
+)
 
 if st.session_state.supabase is None:
     st.session_state.supabase = init_supabase()
-if st.session_state.supabase is not None:
-    st.session_state.use_supabase_auth = True
+st.session_state.use_supabase_auth = st.session_state.supabase is not None
 
 
 # Page routing
@@ -815,11 +803,11 @@ if st.session_state.page == 'Coach' and not st.session_state.user:
 # --- 1. Login / Signup Page ---
 if st.session_state.page == 'Login':
     st.header("Login / Sign Up")
-    auth_provider = "Supabase" if st.session_state.use_supabase_auth else "Firebase"
+    auth_provider = "Supabase" if st.session_state.use_supabase_auth else "Not configured"
     st.caption(f"Auth Provider: **{auth_provider}**")
 
-    if not st.session_state.use_supabase_auth and not st.session_state.firebase:
-        st.warning("Na Supabase configured hai, na Firebase connected.")
+    if not st.session_state.use_supabase_auth:
+        st.error("Supabase configured nahi hai. Sidebar me SUPABASE_URL aur SUPABASE_ANON_KEY set karein.")
     else:
         choice = st.radio("Chunein:", ("Login", "Sign Up"))
         email = st.text_input("Email")
@@ -828,17 +816,14 @@ if st.session_state.page == 'Login':
         if choice == "Sign Up":
             if st.button("Sign Up"):
                 try:
-                    if st.session_state.use_supabase_auth:
-                        resp = st.session_state.supabase.auth.sign_up({"email": email, "password": password})
-                        user_obj = resp.user
-                        session_obj = resp.session
-                        st.session_state.user = {
-                            "email": user_obj.email if user_obj else email,
-                            "localId": user_obj.id if user_obj else email,
-                            "idToken": session_obj.access_token if session_obj else ""
-                        }
-                    else:
-                        st.session_state.user = st.session_state.auth.create_user_with_email_and_password(email, password)
+                    resp = st.session_state.supabase.auth.sign_up({"email": email, "password": password})
+                    user_obj = resp.user
+                    session_obj = resp.session
+                    st.session_state.user = {
+                        "email": user_obj.email if user_obj else email,
+                        "localId": user_obj.id if user_obj else email,
+                        "idToken": session_obj.access_token if session_obj else ""
+                    }
                     st.success("Account ban gaya! Login ho raha hai...")
                     safe_speak("Account created! Logging you in.")
                     time.sleep(1)
@@ -849,24 +834,16 @@ if st.session_state.page == 'Login':
         if choice == "Login":
             if st.button("Login"):
                 try:
-                    if st.session_state.use_supabase_auth:
-                        resp = st.session_state.supabase.auth.sign_in_with_password({"email": email, "password": password})
-                        user_obj = resp.user
-                        session_obj = resp.session
-                        st.session_state.user = {
-                            "email": user_obj.email,
-                            "localId": user_obj.id,
-                            "idToken": session_obj.access_token if session_obj else ""
-                        }
-                        st.session_state.workout_log = load_workout_logs_supabase()
-                        profile = load_user_profile_supabase()
-                    else:
-                        user = st.session_state.auth.sign_in_with_email_and_password(email, password)
-                        st.session_state.user = user
-                        token = st.session_state.user['idToken']
-                        config = st.session_state.firebase_config
-                        st.session_state.workout_log = load_workout_logs_rest(config, token)
-                        profile = load_user_profile_rest(config, token)
+                    resp = st.session_state.supabase.auth.sign_in_with_password({"email": email, "password": password})
+                    user_obj = resp.user
+                    session_obj = resp.session
+                    st.session_state.user = {
+                        "email": user_obj.email,
+                        "localId": user_obj.id,
+                        "idToken": session_obj.access_token if session_obj else ""
+                    }
+                    st.session_state.workout_log = load_workout_logs_supabase()
+                    profile = load_user_profile_supabase()
 
                     if profile:
                         st.session_state.profile_age = profile.get("age", st.session_state.profile_age)
@@ -978,7 +955,7 @@ elif st.session_state.page == 'Coach':
             
     # --- Logout Button (Sidebar) ---
     if st.sidebar.button("Logout", use_container_width=True, type="secondary"):
-        if st.session_state.use_supabase_auth and st.session_state.supabase:
+        if st.session_state.supabase:
             try:
                 st.session_state.supabase.auth.sign_out()
             except Exception:
@@ -1026,13 +1003,7 @@ elif st.session_state.page == 'Coach':
                         "timestamp": timestamp_now
                     }
                     
-                    # NAYA LOGIC: Log ko REST API se save karein
-                    if st.session_state.use_supabase_auth:
-                        save_success = save_workout_log_supabase(log_data)
-                    else:
-                        token = st.session_state.user['idToken']
-                        config = st.session_state.firebase_config
-                        save_success = save_workout_log_rest(config, token, log_data)
+                    save_success = save_workout_log_supabase(log_data)
                     
                     if save_success:
                         # Log ko lokal list mein bhi add karein (taaki UI turant update ho)
@@ -1175,9 +1146,7 @@ elif st.session_state.page == 'Coach':
                 "experience_level": experience_level,
                 "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             }
-            token = st.session_state.user['idToken']
-            config = st.session_state.firebase_config
-            saved = save_user_profile_supabase(profile_payload) if st.session_state.use_supabase_auth else save_user_profile_rest(config, token, profile_payload)
+            saved = save_user_profile_supabase(profile_payload)
             if saved:
                 st.success("Profile saved. Next login me auto-load ho jayega.")
 
@@ -1276,7 +1245,8 @@ elif st.session_state.page == 'Coach':
         else:
             while st.session_state.webcam_started:
                 ret, frame = cap.read()
-                if not ret: break
+                if not ret:
+                    break
 
                 elapsed_time = time.time() - st.session_state.start_time
                 image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -1427,7 +1397,7 @@ elif st.session_state.page == 'Coach':
                             mp_drawing.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
                             mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
                         )
-                except Exception as e:
+                except Exception:
                     st.session_state.feedback = "Poora shareer camera mein dikhayein!"
 
                 # Voice Assistant Logic
