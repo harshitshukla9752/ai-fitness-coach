@@ -349,8 +349,21 @@ def load_user_profile_rest(config, user_token):
         return None
 
 def init_supabase():
-    url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
-    key = st.secrets.get("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
+    secrets_url = st.secrets.get("SUPABASE_URL")
+    secrets_key = st.secrets.get("SUPABASE_ANON_KEY")
+
+    # Support nested Streamlit secrets format:
+    # [supabase]
+    # url = "..."
+    # key = "..."
+    supabase_block = st.secrets.get("supabase", {})
+    block_url = supabase_block.get("url") if isinstance(supabase_block, dict) else None
+    block_key = None
+    if isinstance(supabase_block, dict):
+        block_key = supabase_block.get("key") or supabase_block.get("anon_key")
+
+    url = secrets_url or block_url or os.getenv("SUPABASE_URL")
+    key = secrets_key or block_key or os.getenv("SUPABASE_ANON_KEY")
     if not url or not key:
         return None
     try:
@@ -772,7 +785,7 @@ st.markdown(
 st.sidebar.title("Configuration")
 st.sidebar.info("App ab sirf Supabase Auth + DB use karta hai.")
 st.sidebar.code(
-    "SUPABASE_URL=https://<project-ref>.supabase.co\nSUPABASE_ANON_KEY=<anon-key>",
+    "SUPABASE_URL=https://<project-ref>.supabase.co\nSUPABASE_ANON_KEY=<anon-key>\n\n# OR in secrets.toml\n[supabase]\nurl=\"https://<project-ref>.supabase.co\"\nkey=\"<anon-key>\"",
     language="bash"
 )
 
