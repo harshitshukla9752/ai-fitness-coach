@@ -1,6 +1,5 @@
 import cv2
 import mediapipe as mp
-import numpy as np
 import streamlit as st
 import time
 from utils import calculate_angle
@@ -56,13 +55,20 @@ def load_models():
     mp_pose = mp.solutions.pose
     mp_drawing = mp.solutions.drawing_utils
 
-    # ✅ Set custom writable model path
-    os.environ["MEDIAPIPE_MODEL_PATH"] = os.path.expanduser("~/.mediapipe/modules/pose_landmark/")
+    # Prefer bundled model path when available, otherwise fall back to user cache path.
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    bundled_model = os.path.join(project_dir, "models", "pose_landmark_lite.tflite")
+    cache_model_dir = os.path.expanduser("~/.mediapipe/modules/pose_landmark/")
+    cache_model = os.path.join(cache_model_dir, "pose_landmark_lite.tflite")
 
-    local_model = os.path.join(os.environ["MEDIAPIPE_MODEL_PATH"], "pose_landmark_lite.tflite")
+    local_model = bundled_model if os.path.exists(bundled_model) else cache_model
+    os.environ["MEDIAPIPE_MODEL_PATH"] = os.path.dirname(local_model)
 
     if not os.path.exists(local_model):
-        st.error("Pose model not found! Please ensure setup.sh runs before deployment.")
+        st.error(
+            "Pose model not found. Expected at ./models/pose_landmark_lite.tflite "
+            "or ~/.mediapipe/modules/pose_landmark/pose_landmark_lite.tflite."
+        )
         st.stop()
 
     try:
@@ -237,7 +243,7 @@ def save_workout_log_rest(config, user_token, workout_data):
         error_details = e
         try:
             error_details = response.json()
-        except:
+        except Exception:
             pass
         st.error(f"Database save error: {error_details}")
         return False
@@ -278,7 +284,7 @@ def load_workout_logs_rest(config, user_token):
         error_details = e
         try:
             error_details = response.json()
-        except:
+        except Exception:
             pass
         # Pehli baar login par error na dikhayein (jab collection nahi bana hai)
         if "Missing" not in str(error_details):
@@ -770,7 +776,7 @@ if 'firebase_config' in st.secrets:
     try:
         firebase_config_json = json.dumps(st.secrets.firebase_config)
         st.session_state.firebase_config_input = firebase_config_json # Save karein
-    except:
+    except Exception:
         st.error("Firebase Secrets load karne mein error.")
 # 2. Agar nahi mila, toh sidebar (Local test ke liye)
 else:
@@ -1276,7 +1282,8 @@ elif st.session_state.page == 'Coach':
         else:
             while st.session_state.webcam_started:
                 ret, frame = cap.read()
-                if not ret: break
+                if not ret:
+                    break
 
                 elapsed_time = time.time() - st.session_state.start_time
                 image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -1427,7 +1434,7 @@ elif st.session_state.page == 'Coach':
                             mp_drawing.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
                             mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
                         )
-                except Exception as e:
+                except Exception:
                     st.session_state.feedback = "Poora shareer camera mein dikhayein!"
 
                 # Voice Assistant Logic
