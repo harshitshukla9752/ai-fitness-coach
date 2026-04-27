@@ -362,8 +362,9 @@ def init_supabase():
     if isinstance(supabase_block, dict):
         block_key = supabase_block.get("key") or supabase_block.get("anon_key")
 
-    url = secrets_url or block_url or os.getenv("SUPABASE_URL")
-    key = secrets_key or block_key or os.getenv("SUPABASE_ANON_KEY")
+    # User requirement: load Supabase credentials from Streamlit secrets only.
+    url = secrets_url or block_url
+    key = secrets_key or block_key
     if not url or not key:
         return None
     try:
@@ -783,10 +784,10 @@ st.markdown(
 
 # --- Deployment Logic (Supabase only) ---
 st.sidebar.title("Configuration")
-st.sidebar.info("App ab sirf Supabase Auth + DB use karta hai.")
+st.sidebar.info("App ab sirf Supabase Auth + DB use karta hai (from .streamlit/secrets.toml).")
 st.sidebar.code(
-    "SUPABASE_URL=https://<project-ref>.supabase.co\nSUPABASE_ANON_KEY=<anon-key>\n\n# OR in secrets.toml\n[supabase]\nurl=\"https://<project-ref>.supabase.co\"\nkey=\"<anon-key>\"",
-    language="bash"
+    "[supabase]\nurl=\"https://<project-ref>.supabase.co\"\nkey=\"<anon-key>\"\n\n# OR\nSUPABASE_URL=\"https://<project-ref>.supabase.co\"\nSUPABASE_ANON_KEY=\"<anon-key>\"",
+    language="toml"
 )
 
 if st.session_state.supabase is None:
@@ -807,7 +808,7 @@ if st.session_state.page == 'Login':
     st.caption(f"Auth Provider: **{auth_provider}**")
 
     if not st.session_state.use_supabase_auth:
-        st.error("Supabase configured nahi hai. Sidebar me SUPABASE_URL aur SUPABASE_ANON_KEY set karein.")
+        st.error("Supabase configured nahi hai. .streamlit/secrets.toml me credentials add karein, phir app restart karein.")
     else:
         choice = st.radio("Chunein:", ("Login", "Sign Up"))
         email = st.text_input("Email")
