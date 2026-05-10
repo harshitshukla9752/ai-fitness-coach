@@ -5,7 +5,6 @@ import time
 from utils import calculate_angle
 import streamlit.components.v1 as components
 import json
-import requests
 import gc # Memory fix ke liye
 import os
 import io
@@ -199,155 +198,6 @@ VOICE_OPTIONS = {
     }
 }
 
-# --- YAHI HAI ASLI FIX: Database Logic (REST API) ---
-# Ismein .firestore() ka istemaal hi nahi hai
-def get_db_url(config, user_token):
-    project_id = config.get("projectId")
-    user_id = st.session_state.user['localId']
-    # Naya Fix: Har user ka data ek unique collection mein
-    collection_path = f"user_logs_{user_id}" 
-    base_url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/{collection_path}"
-    return base_url, user_token
-
-def save_workout_log_rest(config, user_token, workout_data):
-    """Workout log ko REST API se Firestore mein save karein."""
-    try:
-        base_url, token = get_db_url(config, user_token)
-        url = f"{base_url}" # Naye document ke liye collection URL
-        
-        # Naya Fix: Auth token ko URL se hata kar Header mein daalein
-        headers = {
-            "Authorization": f"Bearer {user_token}",
-            "Content-Type": "application/json"
-        }
-        
-        firestore_document = {
-            "fields": {
-                "exercise": {"stringValue": workout_data["exercise"]},
-                "side": {"stringValue": workout_data["side"]},
-                "reps_left": {"integerValue": str(workout_data["reps_left"])}, # String mein save karein
-                "reps_right": {"integerValue": str(workout_data["reps_right"])}, # String mein save karein
-                "duration": {"doubleValue": workout_data["duration"]},
-                "set_number": {"integerValue": str(workout_data["set_number"])}, # String mein save karein
-                "target_reps": {"integerValue": str(workout_data["target_reps"])}, # String mein save karein
-                "timestamp": {"timestampValue": workout_data["timestamp"]}
-            }
-        }
-        
-        response = requests.post(url, json=firestore_document, headers=headers)
-        response.raise_for_status() # Agar error ho toh ruk jaaye
-        return True
-    except Exception as e:
-        # Error ko response se print karein
-        error_details = e
-        try:
-            error_details = response.json()
-        except Exception:
-            pass
-        st.error(f"Database save error: {error_details}")
-        return False
-
-def load_workout_logs_rest(config, user_token):
-    """Workout logs ko REST API se load karein."""
-    try:
-        base_url, token = get_db_url(config, user_token)
-        url = f"{base_url}?orderBy=timestamp desc"
-        
-        # Naya Fix: Auth token ko Header mein daalein
-        headers = {
-            "Authorization": f"Bearer {user_token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        
-        data = response.json()
-        logs = []
-        
-        if "documents" in data:
-            for doc in data["documents"]:
-                fields = doc.get("fields", {})
-                logs.append({
-                    "exercise": fields.get("exercise", {}).get("stringValue", "N/A"),
-                    "side": fields.get("side", {}).get("stringValue", "N/A"),
-                    "reps_left": int(fields.get("reps_left", {}).get("integerValue", 0)),
-                    "reps_right": int(fields.get("reps_right", {}).get("integerValue", 0)),
-                    "duration": float(fields.get("duration", {}).get("doubleValue", 0.0)),
-                    "set_number": int(fields.get("set_number", {}).get("integerValue", 1)),
-                    "target_reps": int(fields.get("target_reps", {}).get("integerValue", 10)),
-                    "timestamp": fields.get("timestamp", {}).get("timestampValue", "")
-                })
-        return logs
-    except Exception as e:
-        error_details = e
-        try:
-            error_details = response.json()
-        except Exception:
-            pass
-        # Pehli baar login par error na dikhayein (jab collection nahi bana hai)
-        if "Missing" not in str(error_details):
-             st.error(f"Database load error: {error_details}")
-        return []
-
-def _to_firestore_value(value):
-    if isinstance(value, bool):
-        return {"booleanValue": value}
-    if isinstance(value, int):
-        return {"integerValue": str(value)}
-    if isinstance(value, float):
-        return {"doubleValue": value}
-    return {"stringValue": str(value)}
-
-def save_user_profile_rest(config, user_token, profile_data):
-    try:
-        project_id = config.get("projectId")
-        user_id = st.session_state.user['localId']
-        document_path = f"user_profiles/{user_id}"
-        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/{document_path}"
-        headers = {
-            "Authorization": f"Bearer {user_token}",
-            "Content-Type": "application/json"
-        }
-        fields = {key: _to_firestore_value(value) for key, value in profile_data.items()}
-        payload = {"fields": fields}
-        response = requests.patch(url, json=payload, headers=headers)
-        response.raise_for_status()
-        return True
-    except Exception as e:
-        st.warning(f"Profile save issue: {e}")
-        return False
-
-def load_user_profile_rest(config, user_token):
-    try:
-        project_id = config.get("projectId")
-        user_id = st.session_state.user['localId']
-        document_path = f"user_profiles/{user_id}"
-        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/{document_path}"
-        headers = {
-            "Authorization": f"Bearer {user_token}",
-            "Content-Type": "application/json"
-        }
-        response = requests.get(url, headers=headers)
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
-        fields = response.json().get("fields", {})
-        profile = {}
-        for key, val in fields.items():
-            if "stringValue" in val:
-                profile[key] = val["stringValue"]
-            elif "integerValue" in val:
-                profile[key] = int(val["integerValue"])
-            elif "doubleValue" in val:
-                profile[key] = float(val["doubleValue"])
-            elif "booleanValue" in val:
-                profile[key] = bool(val["booleanValue"])
-        return profile
-    except Exception as e:
-        st.warning(f"Profile load issue: {e}")
-        return None
-
 def init_supabase():
     secrets_url = st.secrets.get("SUPABASE_URL")
     secrets_key = st.secrets.get("SUPABASE_ANON_KEY")
@@ -357,14 +207,19 @@ def init_supabase():
     # url = "..."
     # key = "..."
     supabase_block = st.secrets.get("supabase", {})
-    block_url = supabase_block.get("url") if isinstance(supabase_block, dict) else None
+    block_url = None
     block_key = None
-    if isinstance(supabase_block, dict):
+    if hasattr(supabase_block, "get"):
+        block_url = supabase_block.get("url")
         block_key = supabase_block.get("key") or supabase_block.get("anon_key")
 
     # User requirement: load Supabase credentials from Streamlit secrets only.
     url = secrets_url or block_url
     key = secrets_key or block_key
+    if url:
+        url = str(url).strip().rstrip("/")
+    if key:
+        key = str(key).strip()
     if not url or not key:
         return None
     try:
@@ -372,6 +227,21 @@ def init_supabase():
     except Exception as e:
         st.warning(f"Supabase init failed: {e}")
         return None
+
+def format_supabase_auth_error(action, error):
+    error_text = str(error)
+    lowered = error_text.lower()
+    if "getaddrinfo" in lowered or "name resolution" in lowered or "temporary failure" in lowered:
+        return (
+            f"{action} Error: Supabase URL DNS/network se connect nahi ho pa raha. "
+            "`.streamlit/secrets.toml` me `[supabase] url` sahi project URL rakhein, "
+            "internet/DNS check karein, aur app restart karein."
+        )
+    if "invalid login credentials" in lowered:
+        return f"{action} Error: Email ya password galat hai."
+    if "email not confirmed" in lowered:
+        return f"{action} Error: Pehle Supabase confirmation email verify karein."
+    return f"{action} Error: {error_text}"
 
 def save_workout_log_supabase(log_data):
     try:
@@ -768,8 +638,9 @@ st.title("🏋️ AI Virtual Fitness Coach")
 st.markdown(
     """
     <style>
-        .stApp {background: linear-gradient(120deg, #0b1020 0%, #111827 55%, #1f2937 100%);}
+        .stApp {background: linear-gradient(120deg, #0b1020 0%, #111827 55%, #1f2937 100%); color: #f8fafc;}
         .block-container {padding-top: 1.2rem;}
+        h1, h2, h3, h4, h5, h6, p, label, span, div {color: #f8fafc;}
         .smart-card {
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 14px;
@@ -783,17 +654,11 @@ st.markdown(
 )
 
 # --- Deployment Logic (Supabase only) ---
-st.sidebar.title("Configuration")
-st.sidebar.info("App ab sirf Supabase Auth + DB use karta hai (from .streamlit/secrets.toml).")
-st.sidebar.code(
-    "[supabase]\nurl=\"https://<project-ref>.supabase.co\"\nkey=\"<anon-key>\"\n\n# OR\nSUPABASE_URL=\"https://<project-ref>.supabase.co\"\nSUPABASE_ANON_KEY=\"<anon-key>\"",
-    language="toml"
-)
-
+# Credentials are read silently from .streamlit/secrets.toml.
+# No login-screen configuration sidebar is shown.
 if st.session_state.supabase is None:
     st.session_state.supabase = init_supabase()
 st.session_state.use_supabase_auth = st.session_state.supabase is not None
-
 
 # Page routing
 if st.session_state.page == 'Login' and st.session_state.user:
@@ -830,7 +695,7 @@ if st.session_state.page == 'Login':
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Signup Error: {e}")
+                    st.error(format_supabase_auth_error("Signup", e))
 
         if choice == "Login":
             if st.button("Login"):
@@ -864,7 +729,7 @@ if st.session_state.page == 'Login':
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Login Error: {e}")
+                    st.error(format_supabase_auth_error("Login", e))
 
 # --- 2. Main Coach Page (Login ke baad) ---
 elif st.session_state.page == 'Coach':

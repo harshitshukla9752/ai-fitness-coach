@@ -12,12 +12,15 @@
    - `public.user_profiles`
 
 ## 3) Add app secrets
-Set these values in Streamlit secrets (or environment variables):
+Set these values in `.streamlit/secrets.toml`:
 
 ```toml
-SUPABASE_URL = "https://<project-ref>.supabase.co"
-SUPABASE_ANON_KEY = "<anon-public-key>"
+[supabase]
+url = "https://<project-ref>.supabase.co"
+key = "<anon-public-key>"
 ```
+
+Restart Streamlit after changing the secrets file.
 
 ## 4) Verify in app
 1. Start app: `streamlit run app.py`

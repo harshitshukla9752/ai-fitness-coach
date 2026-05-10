@@ -1,10 +1,10 @@
 # 🏋️ AI Virtual Fitness Coach
 
-*Full Stack AI Fitness Application • Python • Streamlit • MediaPipe • Firebase*
+*Full Stack AI Fitness Application • Python • Streamlit • MediaPipe • Supabase*
 
 ## 🚀 Overview
 
-**AI Virtual Fitness Coach** is a full-stack, AI-powered workout assistant that uses **real-time pose detection**, **rep counting**, **voice feedback**, and **cloud-based progress tracking**. Built using **Python**, **Streamlit**, **MediaPipe**, and **Firebase**, it turns your webcam into a smart fitness trainer.
+**AI Virtual Fitness Coach** is a full-stack, AI-powered workout assistant that uses **real-time pose detection**, **rep counting**, **voice feedback**, and **cloud-based progress tracking**. Built using **Python**, **Streamlit**, **MediaPipe**, and **Supabase**, it turns your webcam into a smart fitness trainer.
 
 You can perform 7 different exercises, track your reps/sets, receive voice guidance, and store your entire workout history securely in the cloud.
 
@@ -43,13 +43,13 @@ Automatically counts:
 * **Male/Female voices**
 * Motivational prompts: “Rep complete!”, “Go lower!”, “Keep your posture straight!”
 
-### 🔹 **User Authentication (Firebase)**
+### 🔹 **User Authentication (Supabase)**
 
-Secure **Email/Password Login & Signup** using Firebase Authentication.
+Secure **Email/Password Login & Signup** using Supabase Authentication.
 
 ### 🔹 **Workout History & Cloud Sync**
 
-Every workout is saved to **Firebase Firestore** permanently:
+Every workout is saved to **Supabase Postgres** permanently:
 
 * Exercise performed
 * Sets completed
@@ -114,8 +114,7 @@ Now supports complete profile-based planning:
 * **OpenCV** – Webcam capture & image processing
 * **MediaPipe** – Pose estimation model
 * **NumPy** – Angle math & calculations
-* **Pyrebase4** – Firebase authentication handling
-* **Requests** – Firestore database communication
+* **Supabase** – Authentication and database storage
 
 ---
 
@@ -157,33 +156,17 @@ GEMINI_API_KEY=your_key_here
 > - OpenAI dashboard: https://platform.openai.com/api-keys
 > - Google AI Studio (Gemini): https://aistudio.google.com/app/apikey
 
-### **4️⃣ Setup Firebase**
+### **4️⃣ Setup Supabase Auth + DB**
 
-1. Go to Firebase Console → Create Project
-2. Enable Email/Password Login
-3. Create Firestore Database → Start in Test Mode
-4. Go to **Project Settings** → create a **Web App** (</>)
-5. Copy **firebaseConfig** JSON keys
-6. Manually add this key:
+This app uses **Supabase only** for login/signup and workout/profile storage. Add credentials in `.streamlit/secrets.toml`:
 
-```
-"databaseURL": "https://<your-project-id>.firebaseio.com/"
+```toml
+[supabase]
+url = "https://<project-ref>.supabase.co"
+key = "<anon-public-key>"
 ```
 
-### **Alternative: Supabase Auth + DB (Recommended for now)**
-
-Add these secrets/environment vars:
-
-```
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-```
-
-Create tables, indexes, triggers, and RLS policies in Supabase SQL editor by copying and executing:
-
-```sql
--- copy all SQL from supabase/schema.sql and run it in Supabase SQL Editor
-```
+Then create the database tables, indexes, triggers, and RLS policies by copying and running `supabase/schema.sql` in the Supabase SQL Editor. Detailed guide is available in `supabase/README.md`.
 
 Detailed guide is available in `supabase/README.md`.
 
@@ -195,17 +178,10 @@ streamlit run app.py
 
 Open browser: `http://localhost:8501`
 
-### **7️⃣ Save User Profile Once (No Repeated Questions)**
+### **6️⃣ Save User Profile Once (No Repeated Questions)**
 
 After login, go to **AI Training Planner** tab and click **Save Profile for Next Login**.  
-Your body type, goals, diet preference, and activity profile will auto-load from Firestore on future logins.
-
-### **6️⃣ Paste Firebase Config in App**
-
-* Browser will open automatically
-* Paste your **full Firebase JSON** in the sidebar
-* When connection succeeds → "Firebase Connected!" will appear
-* Now you can Sign Up / Log In
+Your body type, goals, diet preference, and activity profile will auto-load from Supabase on future logins.
 
 ---
 
@@ -223,23 +199,15 @@ Your body type, goals, diet preference, and activity profile will auto-load from
 
 4. Click **Advanced settings...**
 
-5. In **Secrets**, paste your Firebase keys in TOML format:
+5. In **Secrets**, paste your Supabase keys in TOML format:
 
-```
-FIREBASE_CONFIG = """
-{
-  "apiKey": "YOUR_KEY",
-  "authDomain": "YOUR_DOMAIN",
-  "projectId": "YOUR_PROJECT_ID",
-  "storageBucket": "YOUR_BUCKET",
-  "messagingSenderId": "XXXXXXX",
-  "appId": "YOUR_APP_ID",
-  "databaseURL": "YOUR_URL"
-}
-"""
+```toml
+[supabase]
+url = "https://<project-ref>.supabase.co"
+key = "<anon-public-key>"
 ```
 
-6. Click **Deploy!**
+6. Run `supabase/schema.sql` in Supabase SQL Editor once, then click **Deploy!**
 
 Your AI Fitness Coach will go live on Streamlit Cloud.
 
