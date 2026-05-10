@@ -168,6 +168,8 @@ key = "<anon-public-key>"
 
 Then create the database tables, indexes, triggers, and RLS policies by copying and running `supabase/schema.sql` in the Supabase SQL Editor. Detailed guide is available in `supabase/README.md`.
 
+Detailed guide is available in `supabase/README.md`.
+
 ### **5️⃣ Run the App**
 
 ```
