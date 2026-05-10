@@ -166,9 +166,7 @@ url = "https://<project-ref>.supabase.co"
 key = "<anon-public-key>"
 ```
 
-Then create the database tables, indexes, triggers, and RLS policies by copying and running `supabase/schema.sql` in the Supabase SQL Editor. Detailed guide is available in `supabase/README.md`.
-
-Detailed guide is available in `supabase/README.md`.
+Then create the database tables, indexes, triggers, and RLS policies by applying the Supabase migration at `supabase/migrations/20260510000000_initial_schema.sql` (`supabase db push`). Manual SQL Editor fallback is available via `supabase/schema.sql`; detailed guide is in `supabase/README.md`.
 
 ### **5️⃣ Run the App**
 
@@ -207,7 +205,7 @@ url = "https://<project-ref>.supabase.co"
 key = "<anon-public-key>"
 ```
 
-6. Run `supabase/schema.sql` in Supabase SQL Editor once, then click **Deploy!**
+6. Apply `supabase/migrations/20260510000000_initial_schema.sql` once with `supabase db push` (or run `supabase/schema.sql` in SQL Editor), then click **Deploy!**
 
 Your AI Fitness Coach will go live on Streamlit Cloud.
 

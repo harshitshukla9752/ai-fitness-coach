@@ -1,6 +1,5 @@
--- AI Fitness Coach: Supabase database schema reference
--- Canonical migration: supabase/migrations/20260510000000_initial_schema.sql
--- Manual fallback: copy this file into Supabase SQL Editor.
+-- AI Fitness Coach: initial Supabase migration
+-- Apply with: supabase db push
 
 begin;
 
