@@ -76,10 +76,13 @@ class Alert(_message.Message):
     FORMAT_FIELD_NUMBER: _builtins.int
     ICON_FIELD_NUMBER: _builtins.int
     WIDTH_CONFIG_FIELD_NUMBER: _builtins.int
+    TITLE_FIELD_NUMBER: _builtins.int
     body: _builtins.str
     """Content to display."""
     format: Global___Alert.Format.ValueType
     icon: _builtins.str
+    title: _builtins.str
+    """Optional title displayed above the body."""
     @_builtins.property
     def width_config(self) -> _WidthConfig_pb2.WidthConfig:
         """Indicates the width setting: "stetch", "content" or a pixel value."""
@@ -91,10 +94,11 @@ class Alert(_message.Message):
         format: Global___Alert.Format.ValueType = ...,
         icon: _builtins.str = ...,
         width_config: _WidthConfig_pb2.WidthConfig | None = ...,
+        title: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["width_config", b"width_config"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["body", b"body", "format", b"format", "icon", b"icon", "width_config", b"width_config"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["body", b"body", "format", b"format", "icon", b"icon", "title", b"title", "width_config", b"width_config"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
 
 Global___Alert: _TypeAlias = Alert  # noqa: Y015

@@ -47,6 +47,8 @@ class PageProfile(_message.Message):
     HEADLESS_FIELD_NUMBER: _builtins.int
     IS_FRAGMENT_RUN_FIELD_NUMBER: _builtins.int
     SERVER_MODE_FIELD_NUMBER: _builtins.int
+    INSTALLED_SKILLS_FIELD_NUMBER: _builtins.int
+    INSTALLED_AGENTS_FIELD_NUMBER: _builtins.int
     exec_time: _builtins.int
     prep_time: _builtins.int
     uncaught_exception: _builtins.str
@@ -56,8 +58,7 @@ class PageProfile(_message.Message):
     is_fragment_run: _builtins.bool
     server_mode: _builtins.str
     """The server mode used to run the Streamlit app:
-    - "tornado": Traditional Tornado server (streamlit run)
-    - "starlette-managed": Starlette server via server.useStarlette config
+    - "starlette-managed": Starlette server managed by Streamlit (streamlit run CLI)
     - "starlette-app": st.App started via streamlit run
     - "asgi-server": st.App run directly with external ASGI server (uvicorn, gunicorn)
     - "asgi-mounted": st.App mounted on another ASGI framework (FastAPI, Starlette)
@@ -68,6 +69,27 @@ class PageProfile(_message.Message):
     def config(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     @_builtins.property
     def attributions(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def installed_skills(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
+        """Streamlit-shipped agent skills detected on the user's system, encoded as
+        "<location>:<harness>:<skill>" tokens. Locations are "home" (user home),
+        "app" (directory of the main script), and "repo" (nearest ancestor
+        containing a ``.git`` directory, if different from ``app``). Harnesses
+        are "agents", "claude", "codex", "cortex", "cursor", "gemini", and
+        "opencode" (each uses its own skills directory convention). Skills are
+        "developing-with-streamlit" and "finding-streamlit-skills".
+        Empty when no bundled skills are installed.
+        """
+
+    @_builtins.property
+    def installed_agents(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
+        """Agent harnesses detected on the user's system, identified by the
+        presence of the harness's home-level config directory (e.g. ~/.claude,
+        ~/.codex, ~/.snowflake/cortex). Tokens match the harness names used
+        in ``installed_skills``. Independent of whether Streamlit skills are
+        installed in any of them. Empty when no harnesses are detected.
+        """
+
     def __init__(
         self,
         *,
@@ -82,8 +104,10 @@ class PageProfile(_message.Message):
         headless: _builtins.bool = ...,
         is_fragment_run: _builtins.bool = ...,
         server_mode: _builtins.str = ...,
+        installed_skills: _abc.Iterable[_builtins.str] | None = ...,
+        installed_agents: _abc.Iterable[_builtins.str] | None = ...,
     ) -> None: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["attributions", b"attributions", "commands", b"commands", "config", b"config", "exec_time", b"exec_time", "headless", b"headless", "is_fragment_run", b"is_fragment_run", "os", b"os", "prep_time", b"prep_time", "server_mode", b"server_mode", "timezone", b"timezone", "uncaught_exception", b"uncaught_exception"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["attributions", b"attributions", "commands", b"commands", "config", b"config", "exec_time", b"exec_time", "headless", b"headless", "installed_agents", b"installed_agents", "installed_skills", b"installed_skills", "is_fragment_run", b"is_fragment_run", "os", b"os", "prep_time", b"prep_time", "server_mode", b"server_mode", "timezone", b"timezone", "uncaught_exception", b"uncaught_exception"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
 
 Global___PageProfile: _TypeAlias = PageProfile  # noqa: Y015
