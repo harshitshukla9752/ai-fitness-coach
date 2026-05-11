@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Streamlit secrets (keep only example files tracked)
+.streamlit/secrets.toml
+!.streamlit/secrets.example.toml
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Supabase local runtime
+supabase/.temp/

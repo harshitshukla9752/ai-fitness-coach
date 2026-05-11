@@ -15,6 +15,13 @@ import pandas as pd
 from openai import OpenAI
 from supabase import create_client
 
+st.set_page_config(
+    page_title="AI Fitness Coach",
+    page_icon="🏋️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 # --- Voice Assistant (TTS) Function ---
 def speak(text, lang, voice_name):
     # JavaScript mein quotes (') se problem ho sakti hai, isliye unhe hata dein
@@ -634,21 +641,124 @@ def get_training_blueprint(experience_level):
 
 
 # --- Main App ---
-st.title("🏋️ AI Virtual Fitness Coach")
 st.markdown(
     """
     <style>
-        .stApp {background: linear-gradient(120deg, #0b1020 0%, #111827 55%, #1f2937 100%); color: #f8fafc;}
-        .block-container {padding-top: 1.2rem;}
-        h1, h2, h3, h4, h5, h6, p, label, span, div {color: #f8fafc;}
-        .smart-card {
-            border: 1px solid rgba(255,255,255,0.12);
+        :root {
+            --bg: #070b14;
+            --panel: rgba(15, 23, 42, 0.78);
+            --panel-strong: rgba(15, 23, 42, 0.94);
+            --border: rgba(148, 163, 184, 0.22);
+            --text: #f8fafc;
+            --muted: #cbd5e1;
+            --accent: #38bdf8;
+            --accent-2: #22c55e;
+            --danger: #fb7185;
+        }
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 34rem),
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.15), transparent 28rem),
+                linear-gradient(135deg, #070b14 0%, #111827 48%, #0f172a 100%);
+            color: var(--text);
+        }
+        .block-container {
+            max-width: 1180px;
+            padding-top: 1.5rem;
+            padding-bottom: 3rem;
+        }
+        h1, h2, h3, h4, h5, h6, p, label, span {color: var(--text);}
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+            border-right: 1px solid var(--border);
+        }
+        [data-testid="stSidebar"] * {color: var(--text);}
+        .hero-card, .auth-card, .smart-card, .metric-card {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: var(--panel);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+            backdrop-filter: blur(18px);
+        }
+        .hero-card {
+            padding: 34px;
+            margin-bottom: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-card:before {
+            content: "";
+            position: absolute;
+            inset: -80px -120px auto auto;
+            width: 280px;
+            height: 280px;
+            border-radius: 999px;
+            background: rgba(56, 189, 248, 0.18);
+            filter: blur(4px);
+        }
+        .hero-title {
+            font-size: clamp(2.3rem, 6vw, 4.8rem);
+            line-height: 0.95;
+            font-weight: 900;
+            letter-spacing: -0.06em;
+            margin: 0 0 18px 0;
+        }
+        .hero-subtitle {
+            color: var(--muted);
+            font-size: 1.08rem;
+            max-width: 780px;
+            margin-bottom: 22px;
+        }
+        .pill-row {display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;}
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+        .auth-card {padding: 24px; margin-top: 4px;}
+        .auth-title {font-size: 1.45rem; font-weight: 850; margin-bottom: 6px;}
+        .auth-muted {color: var(--muted); margin-bottom: 18px;}
+        .status-ok {color: #86efac; font-weight: 800;}
+        .status-bad {color: #fca5a5; font-weight: 800;}
+        .smart-card {padding: 16px; margin-bottom: 12px;}
+        .metric-card {padding: 18px; text-align: center;}
+        div.stButton > button, div.stDownloadButton > button {
             border-radius: 14px;
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            background: linear-gradient(135deg, #0ea5e9 0%, #22c55e 100%);
+            color: white;
+            font-weight: 800;
+            min-height: 44px;
+        }
+        div.stTextInput > div > div > input, div.stNumberInput input {
+            border-radius: 14px;
+            border: 1px solid var(--border);
+        }
+        [data-testid="stMetric"] {
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid var(--border);
+            border-radius: 18px;
             padding: 14px;
-            background: rgba(255,255,255,0.03);
-            margin-bottom: 10px;
         }
     </style>
+    <div class="hero-card">
+        <div class="pill">🏋️ AI Fitness Coach • Supabase Powered</div>
+        <h1 class="hero-title">Train smarter.<br/>Track every rep.</h1>
+        <p class="hero-subtitle">Real-time pose detection, guided reps, progress analytics, AI planning, and secure cloud history in one polished coaching dashboard.</p>
+        <div class="pill-row">
+            <span class="pill">📹 Live Pose Detection</span>
+            <span class="pill">📊 Analytics Dashboard</span>
+            <span class="pill">🧠 AI Training Planner</span>
+            <span class="pill">🔐 Supabase Auth + DB</span>
+        </div>
+    </div>
     """,
     unsafe_allow_html=True
 )
@@ -668,68 +778,102 @@ if st.session_state.page == 'Coach' and not st.session_state.user:
 
 # --- 1. Login / Signup Page ---
 if st.session_state.page == 'Login':
-    st.header("Login / Sign Up")
-    auth_provider = "Supabase" if st.session_state.use_supabase_auth else "Not configured"
-    st.caption(f"Auth Provider: **{auth_provider}**")
+    left_col, auth_col = st.columns([1.15, 0.85], gap="large")
 
-    if not st.session_state.use_supabase_auth:
-        st.error("Supabase configured nahi hai. .streamlit/secrets.toml me credentials add karein, phir app restart karein.")
-    else:
-        choice = st.radio("Chunein:", ("Login", "Sign Up"))
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
+    with left_col:
+        st.markdown(
+            """
+            <div class="smart-card">
+                <h2 style="margin-top:0;">Why this coach feels smarter</h2>
+                <p style="color:#cbd5e1;">A polished full-stack fitness app with real-time computer vision, Supabase-backed accounts, workout history, nutrition planning, and AI coaching.</p>
+                <div class="pill-row">
+                    <span class="pill">✅ 7 exercises</span>
+                    <span class="pill">✅ Rep + set tracking</span>
+                    <span class="pill">✅ Secure profiles</span>
+                    <span class="pill">✅ CSV export</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Exercises", "7")
+        c2.metric("Storage", "Supabase")
+        c3.metric("Coach", "AI + Voice")
 
-        if choice == "Sign Up":
-            if st.button("Sign Up"):
-                try:
-                    resp = st.session_state.supabase.auth.sign_up({"email": email, "password": password})
-                    user_obj = resp.user
-                    session_obj = resp.session
-                    st.session_state.user = {
-                        "email": user_obj.email if user_obj else email,
-                        "localId": user_obj.id if user_obj else email,
-                        "idToken": session_obj.access_token if session_obj else ""
-                    }
-                    st.success("Account ban gaya! Login ho raha hai...")
-                    safe_speak("Account created! Logging you in.")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(format_supabase_auth_error("Signup", e))
+    with auth_col:
+        st.markdown('<div class="auth-title">Login / Sign Up</div>', unsafe_allow_html=True)
+        auth_provider = "Supabase" if st.session_state.use_supabase_auth else "Not configured"
+        status_class = "status-ok" if st.session_state.use_supabase_auth else "status-bad"
+        st.markdown(
+            f'<p class="auth-muted">Auth Provider: <span class="{status_class}">{auth_provider}</span></p>',
+            unsafe_allow_html=True
+        )
 
-        if choice == "Login":
-            if st.button("Login"):
-                try:
-                    resp = st.session_state.supabase.auth.sign_in_with_password({"email": email, "password": password})
-                    user_obj = resp.user
-                    session_obj = resp.session
-                    st.session_state.user = {
-                        "email": user_obj.email,
-                        "localId": user_obj.id,
-                        "idToken": session_obj.access_token if session_obj else ""
-                    }
-                    st.session_state.workout_log = load_workout_logs_supabase()
-                    profile = load_user_profile_supabase()
+        if not st.session_state.use_supabase_auth:
+            st.error("Supabase configured nahi hai. .streamlit/secrets.toml me credentials add karein, phir app restart karein.")
+        else:
+            choice = st.radio("Choose action", ("Login", "Sign Up"), horizontal=True, label_visibility="collapsed")
+            email = st.text_input("Email", placeholder="you@example.com")
+            password = st.text_input("Password", type="password", placeholder="••••••••")
 
-                    if profile:
-                        st.session_state.profile_age = profile.get("age", st.session_state.profile_age)
-                        st.session_state.profile_gender = profile.get("gender", st.session_state.profile_gender)
-                        st.session_state.profile_height_cm = profile.get("height_cm", st.session_state.profile_height_cm)
-                        st.session_state.profile_weight_kg = profile.get("weight_kg", st.session_state.profile_weight_kg)
-                        st.session_state.profile_body_type = profile.get("body_type", st.session_state.profile_body_type)
-                        st.session_state.profile_activity_level = profile.get("activity_level", st.session_state.profile_activity_level)
-                        st.session_state.profile_goal_type = profile.get("goal_type", st.session_state.profile_goal_type)
-                        st.session_state.profile_diet_type = profile.get("diet_type", st.session_state.profile_diet_type)
-                        st.session_state.profile_experience_level = profile.get("experience_level", st.session_state.profile_experience_level)
-                    st.session_state.profile_loaded = True
+            if choice == "Sign Up":
+                if st.button("Create account", use_container_width=True):
+                    if not email or not password:
+                        st.warning("Email aur password dono bharna zaroori hai.")
+                    else:
+                        try:
+                            resp = st.session_state.supabase.auth.sign_up({"email": email, "password": password})
+                            user_obj = resp.user
+                            session_obj = resp.session
+                            st.session_state.user = {
+                                "email": user_obj.email if user_obj else email,
+                                "localId": user_obj.id if user_obj else email,
+                                "idToken": session_obj.access_token if session_obj else ""
+                            }
+                            st.success("Account ban gaya! Login ho raha hai...")
+                            safe_speak("Account created! Logging you in.")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(format_supabase_auth_error("Signup", e))
 
-                    st.session_state.set_counter = 1
-                    st.success("Login successful!")
-                    safe_speak("Login successful!")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(format_supabase_auth_error("Login", e))
+            if choice == "Login":
+                if st.button("Login", use_container_width=True):
+                    if not email or not password:
+                        st.warning("Email aur password dono bharna zaroori hai.")
+                    else:
+                        try:
+                            resp = st.session_state.supabase.auth.sign_in_with_password({"email": email, "password": password})
+                            user_obj = resp.user
+                            session_obj = resp.session
+                            st.session_state.user = {
+                                "email": user_obj.email,
+                                "localId": user_obj.id,
+                                "idToken": session_obj.access_token if session_obj else ""
+                            }
+                            st.session_state.workout_log = load_workout_logs_supabase()
+                            profile = load_user_profile_supabase()
+
+                            if profile:
+                                st.session_state.profile_age = profile.get("age", st.session_state.profile_age)
+                                st.session_state.profile_gender = profile.get("gender", st.session_state.profile_gender)
+                                st.session_state.profile_height_cm = profile.get("height_cm", st.session_state.profile_height_cm)
+                                st.session_state.profile_weight_kg = profile.get("weight_kg", st.session_state.profile_weight_kg)
+                                st.session_state.profile_body_type = profile.get("body_type", st.session_state.profile_body_type)
+                                st.session_state.profile_activity_level = profile.get("activity_level", st.session_state.profile_activity_level)
+                                st.session_state.profile_goal_type = profile.get("goal_type", st.session_state.profile_goal_type)
+                                st.session_state.profile_diet_type = profile.get("diet_type", st.session_state.profile_diet_type)
+                                st.session_state.profile_experience_level = profile.get("experience_level", st.session_state.profile_experience_level)
+                            st.session_state.profile_loaded = True
+
+                            st.session_state.set_counter = 1
+                            st.success("Login successful!")
+                            safe_speak("Login successful!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(format_supabase_auth_error("Login", e))
 
 # --- 2. Main Coach Page (Login ke baad) ---
 elif st.session_state.page == 'Coach':
