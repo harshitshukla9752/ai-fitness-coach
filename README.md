@@ -158,7 +158,7 @@ GEMINI_API_KEY=your_key_here
 
 ### **4️⃣ Setup Supabase Auth + DB**
 
-This app uses **Supabase only** for login/signup and workout/profile storage. Add credentials in `.streamlit/secrets.toml`:
+This app uses **Supabase only** for login/signup and workout/profile storage. Copy `.streamlit/secrets.example.toml` to `.streamlit/secrets.toml`, then add credentials:
 
 ```toml
 [supabase]
@@ -185,11 +185,7 @@ Your body type, goals, diet preference, and activity profile will auto-load from
 
 ## ☁️ Deployment (Streamlit Community Cloud)
 
-1. Push these 3 files to a new **Public GitHub Repo**:
-
-   * `app.py`
-   * `requirements.txt`
-   * `utils.py`
+1. Push the full project to a new **Public GitHub Repo** (app code, `models/`, `supabase/`, `docs/`, and dependency files).
 
 2. Log in to **share.streamlit.io**
 
