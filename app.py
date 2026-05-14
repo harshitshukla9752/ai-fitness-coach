@@ -5,7 +5,7 @@ import time
 from utils import calculate_angle
 import streamlit.components.v1 as components
 import json
-import gc # Memory fix ke liye
+import gc  # Memory optimization
 import os
 import io
 import csv
@@ -24,7 +24,7 @@ st.set_page_config(
 
 # --- Voice Assistant (TTS) Function ---
 def speak(text, lang, voice_name):
-    # JavaScript mein quotes (') se problem ho sakti hai, isliye unhe hata dein
+    # Remove quotes that can break the injected JavaScript string.
     text = text.replace("'", "").replace('"', '')
     speech_js = f"""
         <script>
@@ -46,14 +46,14 @@ def speak(text, lang, voice_name):
                 }}
                 window.speechSynthesis.speak(utter);
             }}
-            // Voices load hone ka wait karein
+            // Wait for browser voices to load.
             if (window.speechSynthesis.getVoices().length > 0) {{ doSpeak(); }}
             else {{ window.speechSynthesis.onvoiceschanged = doSpeak; }}
         </script>
     """
     components.html(speech_js, height=0, width=0)
 
-# --- AI Models ko Cache Karein (Memory Fix) ---
+# --- Cache AI Models (Memory Optimization) ---
 @st.cache_resource
 def load_models():
     import os
@@ -132,7 +132,7 @@ def load_models():
             )
             st.stop()
 
-# Models ko load karein (cached)
+# Load cached models.
 mp_pose, pose, mp_drawing = load_models()
 
 # --- Session State Initialization ---
@@ -158,7 +158,7 @@ def _init_default_states():
         'profile_weight_kg': 70,
         'profile_body_type': 'Average',
         'profile_activity_level': 'Moderately Active',
-        'profile_goal_type': 'Body Recomposition (Fat kam + Muscle up)',
+        'profile_goal_type': 'Body Recomposition (Fat Loss + Muscle Gain)',
         'profile_diet_type': 'Vegetarian',
         'profile_experience_level': 'Beginner',
         'profile_loaded': False,
@@ -179,7 +179,7 @@ def safe_speak(text):
 def reset_states(exercise_choice):
     st.session_state.rep_counter_left = 0
     st.session_state.rep_counter_right = 0
-    # Set counter ko reset nahi karenge, taaki woh badhta rahe
+    # Keep the set counter running across the current workout.
     if exercise_choice in ['Squats', 'Push-ups', 'Lunges', 'Jumping Jacks', 'High Knees']:
         initial_stage = 'up'
     else: 
@@ -191,12 +191,12 @@ def reset_states(exercise_choice):
     st.session_state.last_spoken_feedback = st.session_state.feedback
     safe_speak(st.session_state.feedback)
     st.session_state.start_time = time.time()
-    st.session_state.workout_complete_feedback_given = False # Naya set shuru, feedback reset
+    st.session_state.workout_complete_feedback_given = False  # Reset feedback for the new set.
 
 VOICE_OPTIONS = {
     'hi-IN': {
-        'Hindi (Male - Default)': 'Google हिन्दी',
-        'Hindi (Female - Realistic)': 'Microsoft Kalpana - Hindi (India)'
+        'Hindi Voice (Default)': 'Google हिन्दी',
+        'Hindi Voice (Female)': 'Microsoft Kalpana - Hindi (India)'
     },
     'en-US': {
         'English (Female - Default)': 'Google US English',
@@ -240,14 +240,14 @@ def format_supabase_auth_error(action, error):
     lowered = error_text.lower()
     if "getaddrinfo" in lowered or "name resolution" in lowered or "temporary failure" in lowered:
         return (
-            f"{action} Error: Supabase URL DNS/network se connect nahi ho pa raha. "
-            "`.streamlit/secrets.toml` me `[supabase] url` sahi project URL rakhein, "
-            "internet/DNS check karein, aur app restart karein."
+            f"{action} Error: The Supabase URL cannot be reached through DNS/network. "
+            "Set the correct `[supabase] url` project URL in `.streamlit/secrets.toml`, "
+            "check internet/DNS access, and restart the app."
         )
     if "invalid login credentials" in lowered:
-        return f"{action} Error: Email ya password galat hai."
+        return f"{action} Error: The email or password is incorrect."
     if "email not confirmed" in lowered:
-        return f"{action} Error: Pehle Supabase confirmation email verify karein."
+        return f"{action} Error: Please verify the Supabase confirmation email first."
     return f"{action} Error: {error_text}"
 
 def save_workout_log_supabase(log_data):
@@ -437,33 +437,33 @@ def logs_to_csv(logs):
 def generate_ai_insights(analytics, logs, goal_focus):
     if not analytics:
         return [
-            "AI Insight: Aapka baseline build ho raha hai. Pehle 3-5 sessions consistently complete karo.",
-            "AI Insight: Form aur tempo par focus karo, phir load/reps badhao.",
+            "AI Insight: Your baseline is still building. Complete 3-5 sessions consistently first.",
+            "AI Insight: Focus on form and tempo first, then increase load or reps.",
         ]
 
     insights = []
     if analytics["streak"] >= 5:
-        insights.append("AI Insight: Excellent consistency! Ab progressive overload safely apply kar sakte ho.")
+        insights.append("AI Insight: Excellent consistency! You can now apply progressive overload safely.")
     else:
-        insights.append("AI Insight: Consistency improve karo. Minimum 3-day streak challenge set karo.")
+        insights.append("AI Insight: Improve consistency. Set a minimum 3-day streak challenge.")
 
     if analytics["avg_intensity"] < 0.35:
-        insights.append("AI Insight: Intensity low hai. Controlled tempo ke saath har set me 1-2 reps add karo.")
+        insights.append("AI Insight: Intensity is low. Add 1-2 reps per set with controlled tempo.")
     elif analytics["avg_intensity"] > 1.1:
-        insights.append("AI Insight: Intensity high hai. Recovery, hydration, and sleep optimize karo.")
+        insights.append("AI Insight: Intensity is high. Prioritize recovery, hydration, and sleep.")
     else:
-        insights.append("AI Insight: Intensity balanced hai. Isi pattern ko next 1 week maintain karo.")
+        insights.append("AI Insight: Intensity is balanced. Maintain this pattern for the next week.")
 
     if logs:
         top = calculate_analytics(logs)["summary_df"].iloc[0]["Exercise"]
-        insights.append(f"AI Insight: Aapka best-performing movement **{top}** hai. Isko anchor exercise rakho.")
+        insights.append(f"AI Insight: Your best-performing movement is **{top}**. Keep it as an anchor exercise.")
 
     if goal_focus == "Strength":
-        insights.append("Goal Strategy: Compound movement me low-rep high-quality sets prioritize karo.")
+        insights.append("Goal Strategy: Prioritize low-rep, high-quality sets on compound movements.")
     elif goal_focus == "Endurance":
-        insights.append("Goal Strategy: Short rest intervals (30-45 sec) aur higher reps maintain karo.")
+        insights.append("Goal Strategy: Maintain short rest intervals (30-45 sec) and higher reps.")
     else:
-        insights.append("Goal Strategy: 8-15 rep zone, strict form, and mind-muscle connection follow karo.")
+        insights.append("Goal Strategy: Use the 8-15 rep zone with strict form and strong mind-muscle connection.")
 
     return insights
 
@@ -493,18 +493,18 @@ def generate_weekly_plan(goal_focus, challenge_mode=False):
 def ai_coach_reply(user_query, analytics, goal_focus):
     q = user_query.lower().strip()
     if not q:
-        return "Apna question type karo — form, reps, diet ya recovery me se kuch bhi."
+        return "Type your question about form, reps, diet, or recovery."
     if "diet" in q or "protein" in q or "khana" in q:
-        return "Lean protein, complex carbs, hydration aur post-workout meal (30-60 min) optimize karo."
+        return "Prioritize lean protein, complex carbs, hydration, and a post-workout meal within 30-60 minutes."
     if "recovery" in q or "sleep" in q:
-        return "Recovery rule: 7-8 ghante sleep, light mobility, aur same muscle group ko 48h recovery do."
+        return "Recovery rule: sleep 7-8 hours, do light mobility, and give the same muscle group 48 hours to recover."
     if "plateau" in q or "ruk" in q:
-        return "Plateau break: load ya reps me se ek variable hi badhao; deload week bhi plan karo."
+        return "Plateau break: increase only one variable at a time, such as load or reps, and plan a deload week."
     if "goal" in q or "plan" in q:
-        return f"Current goal **{goal_focus}** ke hisaab se target progression aur weekly split planner follow karo."
+        return f"For your current goal, **{goal_focus}**, follow target progression and the weekly split planner."
     if analytics and analytics["avg_intensity"] < 0.35:
-        return "Aapke data ke hisaab se intensity boost chahiye. Next session me +1 rep per set try karo."
-    return "Form-first approach rakho: full ROM, controlled tempo, aur consistent weekly progression."
+        return "Based on your data, your intensity needs a boost. Try +1 rep per set next session."
+    return "Use a form-first approach: full range of motion, controlled tempo, and consistent weekly progression."
 
 def get_real_ai_response(user_query, analytics, goal_focus, calorie_data=None, diet_type=None, experience_level=None):
     api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -522,7 +522,7 @@ def get_real_ai_response(user_query, analytics, goal_focus, calorie_data=None, d
         system_prompt = (
             "You are FitGPT, a dedicated AI coach for this specific project: an AI Virtual Fitness Coach app. "
             "Always provide practical, personalized workout + nutrition advice based on given context. "
-            "Speak in Hinglish (Hindi + English) with clear bullets. "
+            "Use clear English with concise bullets. "
             "Cover reps/sets progression, recovery, calories/macros, and diet options (veg/vegan/non-veg) if relevant. "
             "If user asks unsafe/extreme recommendations, guide toward safe moderate approach."
         )
@@ -558,11 +558,11 @@ def calculate_calories_and_macros(age, gender, height_cm, weight_kg, activity_le
     }
     tdee = bmr * activity_map.get(activity_level, 1.55)
 
-    if goal_type == "Fat Loss (Mota se Fit/Patla)":
+    if goal_type == "Fat Loss":
         target_cal = tdee - 450
         protein = weight_kg * 2.0
         fats = weight_kg * 0.8
-    elif goal_type == "Muscle Gain (Patla se Mota/Fit)":
+    elif goal_type == "Muscle Gain":
         target_cal = tdee + 320
         protein = weight_kg * 1.8
         fats = weight_kg * 1.0
@@ -587,33 +587,33 @@ def calculate_calories_and_macros(age, gender, height_cm, weight_kg, activity_le
 def get_diet_recommendations(diet_type, goal_type, experience_level):
     plans = {
         "Vegetarian": {
-            "breakfast": ["Oats + Milk + Banana + Peanut Butter", "Paneer bhurji + multigrain roti"],
-            "lunch": ["Dal + Rice + Salad + Curd", "Rajma + Jeera rice + veggie bowl"],
-            "snacks": ["Roasted chana + fruits", "Greek yogurt + nuts"],
-            "dinner": ["Tofu/Paneer stir fry + roti", "Soya chunks curry + quinoa"]
+            "breakfast": ["Oats + Milk + Banana + Peanut Butter", "Cottage cheese scramble + multigrain flatbread"],
+            "lunch": ["Lentils + rice + salad + yogurt", "Kidney beans + cumin rice + vegetable bowl"],
+            "snacks": ["Roasted chickpeas + fruit", "Greek yogurt + nuts"],
+            "dinner": ["Tofu or cottage cheese stir-fry + flatbread", "Soy protein curry + quinoa"]
         },
         "Vegan": {
-            "breakfast": ["Soy milk oats + chia seeds", "Besan chilla + peanut chutney"],
+            "breakfast": ["Soy milk oats + chia seeds", "Chickpea flour pancakes + peanut dip"],
             "lunch": ["Chickpea salad + millet roti", "Lentil bowl + brown rice + veggies"],
-            "snacks": ["Sprouts chaat", "Peanut butter toast + fruit"],
+            "snacks": ["Seasoned sprouts bowl", "Peanut butter toast + fruit"],
             "dinner": ["Tofu curry + quinoa", "Soya granules + mixed vegetables"]
         },
         "Non-Vegetarian": {
             "breakfast": ["Egg omelette + toast + fruit", "Greek yogurt + oats + nuts"],
             "lunch": ["Chicken breast + rice + salad", "Fish + sweet potato + veggies"],
             "snacks": ["Boiled eggs + black coffee", "Whey shake + banana"],
-            "dinner": ["Chicken soup + roti + salad", "Egg curry + brown rice"]
+            "dinner": ["Chicken soup + flatbread + salad", "Egg curry + brown rice"]
         }
     }
     level_tip = {
-        "Beginner": "Beginner Tip: 80% consistency > perfection. Same meals repeat karna allowed hai.",
-        "Intermediate": "Intermediate Tip: Meal timing workout ke around optimize karo.",
-        "Pro / Advanced Athlete": "Pro Tip: Weekly refeed, sodium-potassium balance, and peri-workout nutrition track karo."
+        "Beginner": "Beginner Tip: 80% consistency beats perfection. Repeating simple meals is completely fine.",
+        "Intermediate": "Intermediate Tip: Optimize meal timing around your workout.",
+        "Pro / Advanced Athlete": "Pro Tip: Track weekly refeeds, sodium-potassium balance, and peri-workout nutrition."
     }
     goal_tip = {
-        "Fat Loss (Mota se Fit/Patla)": "Goal Tip: 400-500 calorie deficit + high protein + daily steps 8k+.",
-        "Muscle Gain (Patla se Mota/Fit)": "Goal Tip: Lean bulk rakho, calories surplus controlled ho (200-350).",
-        "Body Recomposition (Fat kam + Muscle up)": "Goal Tip: Strength progression + protein high + sleep strict rakho."
+        "Fat Loss": "Goal Tip: 400-500 calorie deficit + high protein + daily steps 8k+.",
+        "Muscle Gain": "Goal Tip: Use a lean bulk with a controlled calorie surplus of 200-350 kcal.",
+        "Body Recomposition (Fat Loss + Muscle Gain)": "Goal Tip: Prioritize strength progression, high protein, and consistent sleep."
     }
     return plans[diet_type], level_tip[experience_level], goal_tip[goal_type]
 
@@ -623,7 +623,7 @@ def get_training_blueprint(experience_level):
             "split": "3-4 days Full Body / Upper-Lower",
             "volume": "8-12 sets per muscle/week",
             "intensity": "RPE 6-7, form first",
-            "progression": "Har week 1-2 reps add or 2.5% load add"
+            "progression": "Add 1-2 reps each week or increase load by 2.5%"
         }
     if experience_level == "Intermediate":
         return {
@@ -737,9 +737,87 @@ st.markdown(
             font-weight: 800;
             min-height: 44px;
         }
-        div.stTextInput > div > div > input, div.stNumberInput input {
-            border-radius: 14px;
+        div.stTextInput > div > div > input, div.stNumberInput input,
+        div[data-baseweb="select"] > div, textarea {
+            border-radius: 14px !important;
+            border: 1px solid rgba(148, 163, 184, 0.45) !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            min-height: 44px;
+            box-shadow: 0 10px 28px rgba(2, 6, 23, 0.18);
+        }
+        [data-baseweb="input"], [data-baseweb="input"] *,
+        div[data-baseweb="select"] > div, div[data-baseweb="select"] > div *,
+        div[data-baseweb="popover"] *, div[role="listbox"] * {
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+        }
+        div.stTextInput input::placeholder,
+        div.stNumberInput input::placeholder {
+            color: #475569 !important;
+            -webkit-text-fill-color: #475569 !important;
+            opacity: 1;
+        }
+        input, textarea,
+        [data-testid="stNumberInput"] input,
+        [data-testid="stTextInput"] input {
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+            caret-color: #0f172a !important;
+        }
+        [data-testid="stNumberInput"] button,
+        [data-testid="stNumberInput"] button * {
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+        }
+        div[data-baseweb="select"] svg,
+        [data-baseweb="input"] svg {fill: #0f172a !important; color: #0f172a !important;}
+        div[data-baseweb="popover"] > div,
+        div[role="listbox"] {
+            background: #ffffff !important;
+            border: 1px solid rgba(15, 23, 42, 0.16) !important;
+            border-radius: 14px !important;
+        }
+        [data-testid="stAlert"] {
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            background: rgba(15, 23, 42, 0.9);
+            color: #f8fafc;
+        }
+        [data-testid="stTabs"] button {color: #e2e8f0; font-weight: 800;}
+        [data-testid="stTabs"] button[aria-selected="true"] {color: #38bdf8;}
+        .stDataFrame, [data-testid="stDataFrame"] {
+            border-radius: 16px;
+            overflow: hidden;
             border: 1px solid var(--border);
+        }
+        .live-stats-card {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            padding: 18px;
+            border-radius: 22px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.22);
+        }
+        .live-stat {text-align: center; padding: 12px; border-radius: 18px; background: rgba(255,255,255,0.06);}
+        .live-stat strong {display:block; color:#cbd5e1; font-size:0.85rem; letter-spacing:0.06em;}
+        .live-stat span {display:block; color:#67e8f9; font-size:clamp(2rem, 5vw, 3rem); font-weight:900;}
+        .feedback-card {
+            margin-top: 12px;
+            padding: 16px;
+            border-radius: 18px;
+            text-align: center;
+            color: #f8fafc;
+            background: linear-gradient(135deg, rgba(14,165,233,0.24), rgba(34,197,94,0.18));
+            border: 1px solid rgba(103, 232, 249, 0.35);
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+        @media (max-width: 760px) {
+            .live-stats-card {grid-template-columns: 1fr;}
+            .hero-card {padding: 24px;}
         }
         [data-testid="stMetric"] {
             background: rgba(15, 23, 42, 0.72);
@@ -811,7 +889,7 @@ if st.session_state.page == 'Login':
         )
 
         if not st.session_state.use_supabase_auth:
-            st.error("Supabase configured nahi hai. .streamlit/secrets.toml me credentials add karein, phir app restart karein.")
+            st.error("Supabase is not configured. Add credentials to `.streamlit/secrets.toml`, then restart the app.")
         else:
             choice = st.radio("Choose action", ("Login", "Sign Up"), horizontal=True, label_visibility="collapsed")
             email = st.text_input("Email", placeholder="you@example.com")
@@ -820,7 +898,7 @@ if st.session_state.page == 'Login':
             if choice == "Sign Up":
                 if st.button("Create account", use_container_width=True):
                     if not email or not password:
-                        st.warning("Email aur password dono bharna zaroori hai.")
+                        st.warning("Email and password are required.")
                     else:
                         try:
                             resp = st.session_state.supabase.auth.sign_up({"email": email, "password": password})
@@ -831,9 +909,6 @@ if st.session_state.page == 'Login':
                                 "localId": user_obj.id if user_obj else email,
                                 "idToken": session_obj.access_token if session_obj else ""
                             }
-                            st.success("Account ban gaya! Login ho raha hai...")
-                            safe_speak("Account created! Logging you in.")
-                            time.sleep(1)
                             st.rerun()
                         except Exception as e:
                             st.error(format_supabase_auth_error("Signup", e))
@@ -841,7 +916,7 @@ if st.session_state.page == 'Login':
             if choice == "Login":
                 if st.button("Login", use_container_width=True):
                     if not email or not password:
-                        st.warning("Email aur password dono bharna zaroori hai.")
+                        st.warning("Email and password are required.")
                     else:
                         try:
                             resp = st.session_state.supabase.auth.sign_in_with_password({"email": email, "password": password})
@@ -868,21 +943,18 @@ if st.session_state.page == 'Login':
                             st.session_state.profile_loaded = True
 
                             st.session_state.set_counter = 1
-                            st.success("Login successful!")
-                            safe_speak("Login successful!")
-                            time.sleep(1)
                             st.rerun()
                         except Exception as e:
                             st.error(format_supabase_auth_error("Login", e))
 
-# --- 2. Main Coach Page (Login ke baad) ---
+# --- 2. Main Coach Page (after login) ---
 elif st.session_state.page == 'Coach':
     
     # --- Sidebar (Coach Settings) ---
     st.sidebar.title(f"Welcome, {st.session_state.user['email'].split('@')[0]}")
     
     exercise_choice = st.sidebar.selectbox(
-        "Exercise chunein:",
+        "Choose Exercise:",
         ("Bicep Curls", "Squats", "Push-ups", "Overhead Press", "Lunges", "Jumping Jacks", "High Knees"),
         key="exercise_choice"
     )
@@ -907,9 +979,9 @@ elif st.session_state.page == 'Coach':
 
     # Smart label logic
     if exercise_choice in ["Bicep Curls", "Push-ups", "Overhead Press"]:
-        side_label = "Kaunsa haath track karein?"
+        side_label = "Which arm should be tracked?"
     elif exercise_choice in ["Squats", "Lunges", "High Knees"]:
-        side_label = "Kaunsa pair track karein?"
+        side_label = "Which leg should be tracked?"
     else: # Jumping Jacks
         side_label = "Tracking:"
     
@@ -928,9 +1000,9 @@ elif st.session_state.page == 'Coach':
     # Voice Assistant Settings
     st.sidebar.title("🗣️ Voice Assistant")
     st.session_state.voice_enabled = st.sidebar.checkbox("Enable Voice Assistant", value=st.session_state.voice_enabled)
-    lang_map = {'Hindi': 'hi-IN', 'English': 'en-US'}
+    lang_map = {'Hindi Voice': 'hi-IN', 'English Voice': 'en-US'}
     default_lang_index = 0 if st.session_state.voice_lang == 'hi-IN' else 1
-    selected_lang_friendly = st.sidebar.selectbox("Assistant Language:", ('Hindi', 'English'), index=default_lang_index)
+    selected_lang_friendly = st.sidebar.selectbox("Assistant Voice Language:", ('Hindi Voice', 'English Voice'), index=default_lang_index)
     st.session_state.voice_lang = lang_map[selected_lang_friendly]
     
     available_voices = VOICE_OPTIONS[st.session_state.voice_lang]
@@ -951,7 +1023,7 @@ elif st.session_state.page == 'Coach':
     # --- Workout Log (Sidebar) ---
     st.sidebar.title("📊 Your Workout Log")
     if not st.session_state.workout_log:
-        st.sidebar.info("Aapka koi workout log nahi hai.")
+        st.sidebar.info("No workout logs yet.")
     else:
         for i, log in enumerate(st.session_state.workout_log):
             ts = parse_timestamp(log.get("timestamp", ""))
@@ -973,14 +1045,14 @@ elif st.session_state.page == 'Coach':
         st.session_state.user = None
         st.session_state.auth = None
         st.session_state.workout_log = []
-        st.session_state.set_counter = 1 # Logout par set counter reset
+        st.session_state.set_counter = 1 # Reset the set counter on logout.
         st.success("Logged out successfully!")
         safe_speak("Logged out successfully!")
         time.sleep(1)
         st.rerun()
 
     # --- Main App Interface (Coach) ---
-    st.caption(f"Aapne chuna hai: **{exercise_choice} ({side_choice})**.")
+    st.caption(f"Selected workout: **{exercise_choice} ({side_choice})**.")
     analytics = calculate_analytics(st.session_state.workout_log)
     tab_live, tab_analytics, tab_plan = st.tabs(["🎥 Live Coach", "📈 Advanced Analytics", "🧠 AI Training Planner"])
 
@@ -989,7 +1061,7 @@ elif st.session_state.page == 'Coach':
             st.session_state.webcam_started = not st.session_state.webcam_started
             
             if st.session_state.webcam_started:
-                # Check karein ki set counter reset karna hai ya nahi
+                # Reset the set counter if needed.
                 if st.session_state.set_counter > st.session_state.target_sets:
                     st.session_state.set_counter = 1
                 reset_states(exercise_choice)
@@ -1008,21 +1080,21 @@ elif st.session_state.page == 'Coach':
                         "reps_left": final_reps_left,
                         "reps_right": final_reps_right,
                         "duration": final_duration,
-                        "set_number": st.session_state.set_counter, # Set number ko log karein
-                        "target_reps": st.session_state.target_reps, # Target ko log karein
+                        "set_number": st.session_state.set_counter, # Log the set number.
+                        "target_reps": st.session_state.target_reps, # Log the target.
                         "timestamp": timestamp_now
                     }
                     
                     save_success = save_workout_log_supabase(log_data)
                     
                     if save_success:
-                        # Log ko lokal list mein bhi add karein (taaki UI turant update ho)
+                        # Add the log locally so the UI updates immediately.
                         st.session_state.workout_log.insert(0, log_data)
                         log_text = f"Set {st.session_state.set_counter} complete! Left: {final_reps_left}, Right: {final_reps_right} reps."
                         st.success(log_text)
                         safe_speak(log_text)
                         
-                        # NAYA: Set logic
+                        # Set progression logic.
                         if st.session_state.set_counter < st.session_state.target_sets:
                             st.session_state.set_counter += 1
                             st.info(f"Get ready for Set {st.session_state.set_counter}!")
@@ -1031,13 +1103,13 @@ elif st.session_state.page == 'Coach':
                             st.balloons()
                             st.success("Workout Complete! Excellent job!")
                             safe_speak("Workout Complete! Excellent job!")
-                            st.session_state.set_counter = 1 # Workout poora, reset
+                            st.session_state.set_counter = 1 # Workout complete, reset.
                             
                     else:
-                        st.error("Workout log save nahi hua (Database Error).")
+                        st.error("Workout log was not saved because of a database error.")
                         safe_speak("Failed to log workout.")
                 else:
-                    st.warning("Koi rep detect nahi hua. Workout log nahi hua.")
+                    st.warning("No reps were detected, so the workout was not logged.")
                     safe_speak("No reps detected. Workout not logged.")
                 
                 st.session_state.start_time = 0
@@ -1046,7 +1118,7 @@ elif st.session_state.page == 'Coach':
     with tab_analytics:
         st.subheader("Performance Intelligence Dashboard")
         if not analytics:
-            st.info("Abhi analytics dikhane ke liye workout data nahi hai. 2-3 sets complete karein.")
+            st.info("Workout data is needed for analytics. Complete 2-3 sets to unlock insights.")
         else:
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Sessions", analytics["total_sessions"])
@@ -1089,17 +1161,17 @@ elif st.session_state.page == 'Coach':
         st.markdown("### Form & Progress Suggestions")
         if analytics:
             top_exercise = analytics["summary_df"].iloc[0]["Exercise"]
-            st.success(f"Strongest pattern: **{top_exercise}** — isko weekly priority rakho.")
+            st.success(f"Strongest pattern: **{top_exercise}** — keep it as a weekly priority.")
             if analytics["streak"] < 3:
-                st.warning("Consistency low hai. 3-day streak challenge start karo for momentum.")
+                st.warning("Consistency is low. Start a 3-day streak challenge to build momentum.")
             else:
-                st.success("Great consistency! Progressive overload safely continue karo.")
+                st.success("Great consistency! Continue progressive overload safely.")
         st.markdown(
             """
             - Warmup 5-7 min before session.
-            - Har rep me full range of motion maintain karo.
-            - 48h recovery rule follow karo same muscle group ke liye.
-            - Har week ek measurable metric improve karo (reps / form / control).
+            - Maintain a full range of motion on every rep.
+            - Follow the 48-hour recovery rule for the same muscle group.
+            - Improve one measurable metric each week (reps, form, or control).
             """
         )
 
@@ -1119,12 +1191,12 @@ elif st.session_state.page == 'Coach':
         with col_b:
             height_cm = st.number_input("Height (cm)", min_value=130, max_value=220, value=st.session_state.profile_height_cm)
             weight_kg = st.number_input("Weight (kg)", min_value=35, max_value=180, value=st.session_state.profile_weight_kg)
-            body_type_options = ["Mota/High Body Fat", "Patla/Lean-Skinny", "Average"]
+            body_type_options = ["High Body Fat", "Lean / Skinny", "Average"]
             body_type = st.selectbox("Body Type", body_type_options, index=safe_index(body_type_options, st.session_state.profile_body_type))
         with col_c:
             activity_options = ["Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Athlete"]
             activity_level = st.selectbox("Activity", activity_options, index=safe_index(activity_options, st.session_state.profile_activity_level))
-            goal_options = ["Fat Loss (Mota se Fit/Patla)", "Muscle Gain (Patla se Mota/Fit)", "Body Recomposition (Fat kam + Muscle up)"]
+            goal_options = ["Fat Loss", "Muscle Gain", "Body Recomposition (Fat Loss + Muscle Gain)"]
             goal_type = st.selectbox(
                 "Transformation Goal",
                 goal_options,
@@ -1158,7 +1230,7 @@ elif st.session_state.page == 'Coach':
             }
             saved = save_user_profile_supabase(profile_payload)
             if saved:
-                st.success("Profile saved. Next login me auto-load ho jayega.")
+                st.success("Profile saved. It will auto-load on your next login.")
 
         calorie_data = calculate_calories_and_macros(age, gender, height_cm, weight_kg, activity_level, goal_type)
         meal_plan, level_tip, goal_tip = get_diet_recommendations(diet_type, goal_type, experience_level)
@@ -1210,7 +1282,7 @@ elif st.session_state.page == 'Coach':
 
         st.markdown("### 💬 Ask AI Coach")
         if st.session_state.use_real_ai:
-            st.caption("Real AI mode ON. `OPENAI_API_KEY` ko Streamlit secrets ya environment variable me set karein.")
+            st.caption("Real AI mode is on. Set `OPENAI_API_KEY` in Streamlit secrets or as an environment variable.")
         st.session_state.ai_auto_voice = st.checkbox("Auto-speak AI replies", value=st.session_state.ai_auto_voice)
         user_query = st.text_input("Ask about form, progression, recovery, diet...", key="ai_query")
         if st.button("Get AI Coach Reply", use_container_width=True):
@@ -1243,7 +1315,7 @@ elif st.session_state.page == 'Coach':
                     unsafe_allow_html=True
                 )
 
-    # --- Stats aur Video ke liye Placeholders (Frontend UI) ---
+    # --- Stats and Video Placeholders (Frontend UI) ---
     stats_placeholder = st.empty()
     video_placeholder = st.empty()
 
@@ -1251,7 +1323,7 @@ elif st.session_state.page == 'Coach':
     if st.session_state.webcam_started:
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
-            st.error("Webcam nahi chala. Permissions check karein.")
+            st.error("Webcam could not start. Check camera permissions.")
         else:
             while st.session_state.webcam_started:
                 ret, frame = cap.read()
@@ -1261,7 +1333,7 @@ elif st.session_state.page == 'Coach':
                 elapsed_time = time.time() - st.session_state.start_time
                 image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image_rgb.flags.writeable = False
-                results = pose.process(image_rgb) # Model yahaan run ho raha hai
+                results = pose.process(image_rgb)  # Run the pose model on the frame.
                 image_rgb.flags.writeable = True
                 image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
                 
@@ -1269,14 +1341,14 @@ elif st.session_state.page == 'Coach':
                 feedback_msg = st.session_state.feedback 
                 
                 try:
-                    # Check karein ki workout poora ho gaya hai ya nahi
+                    # Check whether the workout is complete.
                     if st.session_state.set_counter > st.session_state.target_sets:
                         if not st.session_state.workout_complete_feedback_given:
                             st.session_state.feedback = "Workout Complete! Stop the webcam."
                             safe_speak(st.session_state.feedback)
                             st.session_state.workout_complete_feedback_given = True
                         
-                        # Landmarks draw karein lekin logic skip kar dein
+                        # Draw landmarks while skipping rep logic.
                         if results.pose_landmarks:
                             mp_drawing.draw_landmarks(
                                 image_bgr, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
@@ -1287,7 +1359,7 @@ elif st.session_state.page == 'Coach':
                     elif results.pose_landmarks:
                         landmarks = results.pose_landmarks.landmark
                         
-                        # (Exercise logic mein koi change nahi)
+                        # Exercise-specific pose logic.
                         if exercise_choice in ["Bicep Curls", "Push-ups", "Overhead Press"]:
                             shoulder_l = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                             elbow_l = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
@@ -1321,7 +1393,7 @@ elif st.session_state.page == 'Coach':
                             wrist_r = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
                             angle_r = calculate_angle(hip_r, shoulder_r, wrist_r) # Arm angle
 
-                        # (Thresholds mein koi change nahi)
+                        # Exercise-specific motion thresholds.
                         if exercise_choice == "Bicep Curls":
                             up_threshold, down_threshold, stage_check = 160, 30, 'down'
                         elif exercise_choice == "Squats":
@@ -1408,7 +1480,7 @@ elif st.session_state.page == 'Coach':
                             mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
                         )
                 except Exception:
-                    st.session_state.feedback = "Poora shareer camera mein dikhayein!"
+                    st.session_state.feedback = "Keep your full body visible in the camera frame!"
 
                 # Voice Assistant Logic
                 if (st.session_state.voice_enabled and 
@@ -1416,38 +1488,35 @@ elif st.session_state.page == 'Coach':
                     st.session_state.last_spoken_feedback = st.session_state.feedback
                     safe_speak(st.session_state.feedback)
 
-                # Frontend UI: Stats Dikhayein
+                # Frontend UI: show stats.
                 stats_placeholder.markdown(f"""
-                    <div style="background-color: #222; padding: 15px; border-radius: 10px; font-size: 1.5rem; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                        <div style="text-align: center;">
-                            <strong>LEFT REPS</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{st.session_state.rep_counter_left}</span>
+                    <div class="live-stats-card">
+                        <div class="live-stat">
+                            <strong>LEFT REPS</strong><span>{st.session_state.rep_counter_left}</span>
                         </div>
-                        <div style="text-align: center;">
-                            <strong>TIMER</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{int(elapsed_time)}s</span>
+                        <div class="live-stat">
+                            <strong>TIMER</strong><span>{int(elapsed_time)}s</span>
                         </div>
-                        <div style="text-align: center;">
-                            <strong>RIGHT REPS</strong><br><span style="color: #00FF00; font-size: 2.5rem;">{st.session_state.rep_counter_right}</span>
+                        <div class="live-stat">
+                            <strong>RIGHT REPS</strong><span>{st.session_state.rep_counter_right}</span>
+                        </div>
+                        <div class="live-stat">
+                            <strong>TARGET REPS</strong><span>{st.session_state.target_reps}</span>
+                        </div>
+                        <div class="live-stat">
+                            <strong>CURRENT SET</strong><span>{st.session_state.set_counter} / {st.session_state.target_sets}</span>
+                        </div>
+                        <div class="live-stat">
+                            <strong>STATUS</strong><span>Live</span>
                         </div>
                     </div>
-                    
-                    <div style="background-color: #222; padding: 15px; border-radius: 10px; font-size: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                        <div style="text-align: center;">
-                            <strong>TARGET REPS</strong><br><span style="color: #00FFFF; font-size: 2.5rem;">{st.session_state.target_reps}</span>
-                        </div>
-                        <div style="text-align: center;">
-                            <strong>CURRENT SET</strong><br><span style="color: #00FFFF; font-size: 2.5rem;">{st.session_state.set_counter} / {st.session_state.target_sets}</span>
-                        </div>
-                    </div>
-                    
-                    <div style="font-size: 1.5rem; text-align: center; margin-top: 15px; color: #00FFFF;">
-                        <strong>FEEDBACK:</strong> {st.session_state.feedback}
-                    </div>
+                    <div class="feedback-card">FEEDBACK: {st.session_state.feedback}</div>
                 """, unsafe_allow_html=True)
                 
                 video_placeholder.image(image_bgr, channels="BGR", width='stretch')
                 
-                # NAYA FIX 4: Garbage Collection
-                # Memory saaf karein taaki app crash na ho
+                # Memory cleanup.
+                # Free memory to reduce crash risk.
                 gc.collect()
                 
                 if not st.session_state.webcam_started:
@@ -1457,4 +1526,4 @@ elif st.session_state.page == 'Coach':
             cv2.destroyAllWindows()
             stats_placeholder.empty()
             video_placeholder.empty()
-            gc.collect() # Ek baar aur saaf karein
+            gc.collect()  # Final memory cleanup.

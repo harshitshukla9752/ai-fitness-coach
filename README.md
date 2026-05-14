@@ -39,7 +39,7 @@ Automatically counts:
 
 ### 🔹 **Live Voice Feedback**
 
-* Supports **Hindi/English**
+* Supports **Hindi/English voice feedback**
 * **Male/Female voices**
 * Motivational prompts: “Rep complete!”, “Go lower!”, “Keep your posture straight!”
 
@@ -207,7 +207,7 @@ Your AI Fitness Coach will go live on Streamlit Cloud.
 
 ### Netlify note
 
-Netlify static hosting directly Streamlit apps ko run nahi karta.  
+Netlify static hosting does not run Streamlit apps directly.
 Recommended deployment options for this project:
 
 1. **Streamlit Community Cloud** (easiest)
